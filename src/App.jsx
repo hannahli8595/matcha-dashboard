@@ -6,9 +6,11 @@ import {
 } from "recharts";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
+const { VITE_GOOGLE_CLIENT_ID, VITE_SPREADSHEET_ID } = import.meta.env;
+
 const CONFIG = {
-  clientId:      "15200211727-a845ev854n3uj4rg9er3mn6poj6vn7ss.apps.googleusercontent.com",
-  spreadsheetId: "10r4T3BfMvNNprzCssywV61xwvFbvSCCmxlL--lPcUYc",
+  CLIENT_ID: VITE_GOOGLE_CLIENT_ID,
+  SPREADSHEET_ID: VITE_SPREADSHEET_ID,
   sheets: {
     raw_data: "raw_data",          // ← your exact tab name
     daily:    "daily_consumption", // ← your exact tab name
