@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
@@ -86,7 +87,6 @@ export async function POST(req) {
     const remaining = available - claimed;
     const requested = parseFloat(Grams_Claimed) || 0;
     const status = requested > remaining ? "Waitlist" : "Claimed";
-    const date = new Date().toLocaleDateString("en-US");
 
     const row = {
       Claim_ID: `CLM-${Date.now()}`,
@@ -102,21 +102,6 @@ export async function POST(req) {
     };
 
     await appendRowToSheet("share_claims", row);
-
-    // Write daily_consumption entry
-    if (status === "Claimed") {
-      await appendRowToSheet("daily_consumption", {
-        Tin_ID,
-        Date: date,
-        Brand: row.Brand,
-        Type: row.Product_Type,
-        Name: row.Product_Name,
-        Grams_Used: requested,
-        For_someone_else: Name.trim(),
-        Latte: "", Usucha: "", Combo: "",
-        New_tin_opened: "", Finished_tin_today: "", Notes: "share_claim",
-      });
-    }
 
     return NextResponse.json({ ok: true, status, isWaitlist: status === "Waitlist" });
   } catch (err) {
@@ -154,19 +139,9 @@ export async function PATCH(req) {
 
     if (!match) return NextResponse.json({ error: "No claim found for that name" }, { status: 404 });
 
-    const date = new Date().toLocaleDateString("en-US");
 
     if (cancel) {
       await updateRowInSheet("share_claims", match.__rowIndex, { ...match, Status: "Cancelled" });
-      // Remove consumption entry
-      const { getPrivateData } = await import("@/lib/sheets");
-      const data = await getPrivateData();
-      const toDelete = (data.daily || []).filter(r =>
-        r.Tin_ID === match.Tin_ID &&
-        r.For_someone_else?.toLowerCase() === match.Name?.toLowerCase() &&
-        r.Notes === "share_claim"
-      ).reverse();
-      for (const r of toDelete) if (r.__rowIndex) await deleteRowFromSheet("daily_consumption", r.__rowIndex);
       return NextResponse.json({ ok: true, status: "Cancelled" });
     }
 
@@ -183,30 +158,6 @@ export async function PATCH(req) {
       ...match, Grams_Claimed: requested, Status: newStatus, Notes: Notes ?? match.Notes,
       Timestamp: new Date().toLocaleString("en-US"),
     });
-
-    // Update consumption entry: delete old, write new
-    const { getPrivateData } = await import("@/lib/sheets");
-    const data = await getPrivateData();
-    const oldEntries = (data.daily || []).filter(r =>
-      r.Tin_ID === match.Tin_ID &&
-      r.For_someone_else?.toLowerCase() === match.Name?.toLowerCase() &&
-      r.Notes === "share_claim"
-    ).reverse();
-    for (const r of oldEntries) if (r.__rowIndex) await deleteRowFromSheet("daily_consumption", r.__rowIndex);
-
-    if (newStatus === "Claimed") {
-      await appendRowToSheet("daily_consumption", {
-        Tin_ID: match.Tin_ID,
-        Date: date,
-        Brand: match.Brand,
-        Type: match.Product_Type || "",
-        Name: match.Product_Name,
-        Grams_Used: requested,
-        For_someone_else: match.Name,
-        Latte: "", Usucha: "", Combo: "",
-        New_tin_opened: "", Finished_tin_today: "", Notes: "share_claim",
-      });
-    }
 
     return NextResponse.json({ ok: true, status: newStatus });
   } catch (err) {

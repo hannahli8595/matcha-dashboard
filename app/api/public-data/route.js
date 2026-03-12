@@ -1,7 +1,7 @@
-import { getPublicData } from "../../../lib/sheets";
+import { getPublicData } from "@/lib/sheets";
 import { NextResponse } from "next/server";
 
-export const revalidate = 300; // cache 5 minutes
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
