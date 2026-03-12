@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///Users/hannahli/matcha-dashboard/app/api/public-data/route.js"],"sourcesContent":["import { getPublicData } from \"../../lib/sheets\";\nimport { NextResponse } from \"next/server\";\n\nexport const revalidate = 300; // cache 5 minutes\n\nexport async function GET() {\n  try {\n    const data = await getPublicData();\n    return NextResponse.json(data);\n  } catch (err) {\n    console.error(\"Public data error:\", err);\n    return NextResponse.json({ error: \"Failed to load data\" }, { status: 500 });\n  }\n}\n"],"names":[],"mappings":";;;;;;;;;;;AACA;;;AAEO,MAAM,aAAa,KAAK,kBAAkB;AAE1C,eAAe;IACpB,IAAI;QACF,MAAM,OAAO,MAAM;QACnB,OAAO,gJAAY,CAAC,IAAI,CAAC;IAC3B,EAAE,OAAO,KAAK;QACZ,QAAQ,KAAK,CAAC,sBAAsB;QACpC,OAAO,gJAAY,CAAC,IAAI,CAAC;YAAE,OAAO;QAAsB,GAAG;YAAE,QAAQ;QAAI;IAC3E;AACF"}}]
+}

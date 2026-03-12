@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 106, "column": 0}, "map": {"version":3,"sources":["file:///Users/hannahli/matcha-dashboard/lib/auth.js"],"sourcesContent":["import GoogleProvider from \"next-auth/providers/google\";\n\nexport const authOptions = {\n  providers: [\n    GoogleProvider({\n      clientId: process.env.GOOGLE_CLIENT_ID,\n      clientSecret: process.env.GOOGLE_CLIENT_SECRET,\n    }),\n  ],\n  callbacks: {\n    async session({ session }) {\n      session.user.isOwner = session.user.email === process.env.OWNER_EMAIL;\n      return session;\n    },\n  },\n  pages: { signIn: \"/private\" },\n};\n"],"names":[],"mappings":";;;;AAAA;;AAEO,MAAM,cAAc;IACzB,WAAW;QACT,IAAA,gKAAc,EAAC;YACb,UAAU,QAAQ,GAAG,CAAC,gBAAgB;YACtC,cAAc,QAAQ,GAAG,CAAC,oBAAoB;QAChD;KACD;IACD,WAAW;QACT,MAAM,SAAQ,EAAE,OAAO,EAAE;YACvB,QAAQ,IAAI,CAAC,OAAO,GAAG,QAAQ,IAAI,CAAC,KAAK,KAAK,QAAQ,GAAG,CAAC,WAAW;YACrE,OAAO;QACT;IACF;IACA,OAAO;QAAE,QAAQ;IAAW;AAC9B"}},
+    {"offset": {"line": 133, "column": 0}, "map": {"version":3,"sources":["file:///Users/hannahli/matcha-dashboard/app/api/auth/%5B...nextauth%5D/route.js"],"sourcesContent":["import NextAuth from \"next-auth\";\nimport { authOptions } from \"@/lib/auth\";\n\nconst handler = NextAuth(authOptions);\nexport { handler as GET, handler as POST };\n"],"names":[],"mappings":";;;;;;AAAA;AACA;;;AAEA,MAAM,UAAU,IAAA,kJAAQ,EAAC,4HAAW"}}]
+}
