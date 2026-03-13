@@ -12,6 +12,21 @@ function useMobile() {
   }, []);
   return mobile;
 }
+
+function useG() {
+  const mobile = useMobile();
+  return {
+    col1: {display:"grid",gridTemplateColumns:"1fr",gap:12},
+    col2: {display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr",gap:12},
+    col3: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"1fr 1fr 1fr",gap:12},
+    col3sm: {display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr 1fr",gap:12},
+    col4: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(4,1fr)",gap:mobile?10:20},
+    col5: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(5,1fr)",gap:mobile?10:20},
+    col6: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(6,1fr)",gap:mobile?10:20},
+    col21: {display:"grid",gridTemplateColumns:mobile?"1fr":"2fr 1fr",gap:mobile?12:24},
+    col12: {display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 2fr",gap:mobile?12:24},
+  };
+}
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Line,
@@ -157,6 +172,7 @@ function buildTinId(brand, name, dateReceived) {
 }
 
 function LogEntryModal({tins, onSave, onClose, saving}) {
+  const g = useG();
   const activeTins = tins
     .filter(t => isConsumableExt(t) && (t.Status==="Opened" || t.Status==="Unopened"))
     .sort((a,b) => ({Opened:0,Unopened:1}[a.Status]??9) - ({Opened:0,Unopened:1}[b.Status]??9) || a.Brand.localeCompare(b.Brand));
@@ -280,6 +296,7 @@ function LogEntryModal({tins, onSave, onClose, saving}) {
 }
 
 function AddTinModal({onSave, onClose, saving, existingTins=[]}) {
+  const g = useG();
   const existingBrands = [...new Set(existingTins.map(t=>t.Brand).filter(Boolean))].sort();
 
   const [form, setForm] = useState({
@@ -436,6 +453,7 @@ function toDateInput(v) {
 }
 
 function EditRowModal({row, onSave, onDelete, onClose, saving}) {
+  const g = useG();
   const [form, setForm] = useState(()=>{
     const f={...row};
     // Pre-convert date fields to YYYY-MM-DD
@@ -674,6 +692,7 @@ function EditRowModal({row, onSave, onDelete, onClose, saving}) {
 
 
 function AddCashModal({onSave,onClose,saving}) {
+  const g = useG();
   const [form,setForm]=useState({Date:"",Brand:"",Type:"",Amount:"",Method:"",Status:"Paid"});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   return <Modal title="Add Cash / Payment" onClose={onClose}>
@@ -712,6 +731,7 @@ function AddCashModal({onSave,onClose,saving}) {
 }
 
 function AddCodeModal({onSave,onClose,saving}) {
+  const g = useG();
   const [form,setForm]=useState({Brand:"",Code:"",Discount:"","Affiliate?":"y",Link:"",Dashboard_URL:""});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   return <Modal title="Add Discount / Affiliate Code" onClose={onClose}>
@@ -760,6 +780,7 @@ function parseSuggestions(raw) {
 }
 
 function AddListingModal({ raw_data, onClose, onSave, initial }) {
+  const g = useG();
   const CONSUMABLE_EXT = ["Matcha","Hojicha","Gyokuro","Sencha","Mugwort","Other Tea"];
   const options = raw_data.filter(r => CONSUMABLE_EXT.includes(r.Product_Type));
   const [tinId, setTinId]       = useState(initial?.Tin_ID||"");
@@ -891,6 +912,7 @@ function AddListingModal({ raw_data, onClose, onSave, initial }) {
   </Modal>;
 }
 function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoading, shareModal, setShareModal }) {
+  const g = useG();
   const card={background:C.parchment,padding:"22px 26px",borderRadius:2};
 
   const loadShare = useCallback(async()=>{
@@ -1206,17 +1228,7 @@ function NotOwner({email}) {
 // ── Main private dashboard ────────────────────────────────────────────────────
 function PrivateDashboard() {
   const mobile = useMobile();
-  const g = {
-    col1: {display:"grid",gridTemplateColumns:"1fr",gap:12},
-    col2: {display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr",gap:12},
-    col3: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"1fr 1fr 1fr",gap:12},
-    col3sm: {display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr 1fr",gap:12},
-    col4: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(4,1fr)",gap:mobile?10:20},
-    col5: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(5,1fr)",gap:mobile?10:20},
-    col6: {display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(6,1fr)",gap:mobile?10:20},
-    col21: {display:"grid",gridTemplateColumns:mobile?"1fr":"2fr 1fr",gap:mobile?12:24},
-    col12: {display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 2fr",gap:mobile?12:24},
-  };
+  const g = useG();
   const pad = mobile ? "16px" : "32px 40px";
   const [sheetData,setSheetData]=useState(null);
   const [loading,setLoading]=useState(true);
