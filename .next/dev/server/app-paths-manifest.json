@@ -2,6 +2,7 @@
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/api/private-data/route": "app/api/private-data/route.js",
   "/api/share-data/route": "app/api/share-data/route.js",
+  "/page": "app/page.js",
   "/private/page": "app/private/page.js",
   "/share/page": "app/share/page.js"
 }

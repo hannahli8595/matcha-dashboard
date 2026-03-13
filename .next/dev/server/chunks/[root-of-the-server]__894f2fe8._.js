@@ -348,12 +348,33 @@ const PRIVATE_CODES_FIELDS = [
     "Dashboard_URL"
 ];
 // ── Auth ──────────────────────────────────────────────────────────────────────
+function getCredentials() {
+    // Support both a full JSON blob and individual env vars
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        try {
+            const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            // Fix private key if newlines were escaped
+            if (parsed.private_key && !parsed.private_key.includes("\n")) {
+                parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+            }
+            return parsed;
+        } catch (e) {
+            console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:", e.message);
+        }
+    }
+    // Fall back to individual env vars
+    const private_key = (process.env.GCP_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+    return {
+        type: "service_account",
+        client_email: process.env.GCP_CLIENT_EMAIL,
+        private_key,
+        private_key_id: process.env.GCP_PRIVATE_KEY_ID,
+        project_id: process.env.GCP_PROJECT_ID
+    };
+}
 function getAuth() {
-    const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON not set");
-    const credentials = JSON.parse(raw);
     return new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$googleapis$2f$build$2f$src$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["google"].auth.GoogleAuth({
-        credentials,
+        credentials: getCredentials(),
         scopes: [
             "https://www.googleapis.com/auth/spreadsheets.readonly"
         ]
@@ -386,11 +407,8 @@ async function fetchSheet(sheetName) {
 }
 // ── Write (for private/owner only) ───────────────────────────────────────────
 function getWriteAuth() {
-    const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON not set");
-    const credentials = JSON.parse(raw);
     return new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$googleapis$2f$build$2f$src$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["google"].auth.GoogleAuth({
-        credentials,
+        credentials: getCredentials(),
         scopes: [
             "https://www.googleapis.com/auth/spreadsheets"
         ]
@@ -616,12 +634,15 @@ __turbopack_context__.s([
     "POST",
     ()=>POST,
     "PUT",
-    ()=>PUT
+    ()=>PUT,
+    "dynamic",
+    ()=>dynamic
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next-auth/index.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$auth$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/auth.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/sheets.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
+const dynamic = "force-dynamic";
 ;
 ;
 ;
@@ -714,7 +735,6 @@ async function POST(req) {
         const remaining = available - claimed;
         const requested = parseFloat(Grams_Claimed) || 0;
         const status = requested > remaining ? "Waitlist" : "Claimed";
-        const date = new Date().toLocaleDateString("en-US");
         const row = {
             Claim_ID: `CLM-${Date.now()}`,
             Tin_ID,
@@ -728,24 +748,6 @@ async function POST(req) {
             Notes: Notes || ""
         };
         await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["appendRowToSheet"])("share_claims", row);
-        // Write daily_consumption entry
-        if (status === "Claimed") {
-            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["appendRowToSheet"])("daily_consumption", {
-                Tin_ID,
-                Date: date,
-                Brand: row.Brand,
-                Type: row.Product_Type,
-                Name: row.Product_Name,
-                Grams_Used: requested,
-                For_someone_else: Name.trim(),
-                Latte: "",
-                Usucha: "",
-                Combo: "",
-                New_tin_opened: "",
-                Finished_tin_today: "",
-                Notes: "share_claim"
-            });
-        }
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
             ok: true,
             status,
@@ -794,17 +796,11 @@ async function PATCH(req) {
         }, {
             status: 404
         });
-        const date = new Date().toLocaleDateString("en-US");
         if (cancel) {
             await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["updateRowInSheet"])("share_claims", match.__rowIndex, {
                 ...match,
                 Status: "Cancelled"
             });
-            // Remove consumption entry
-            const { getPrivateData } = await __turbopack_context__.A("[project]/lib/sheets.js [app-route] (ecmascript, async loader)");
-            const data = await getPrivateData();
-            const toDelete = (data.daily || []).filter((r)=>r.Tin_ID === match.Tin_ID && r.For_someone_else?.toLowerCase() === match.Name?.toLowerCase() && r.Notes === "share_claim").reverse();
-            for (const r of toDelete)if (r.__rowIndex) await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["deleteRowFromSheet"])("daily_consumption", r.__rowIndex);
             return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
                 ok: true,
                 status: "Cancelled"
@@ -823,28 +819,6 @@ async function PATCH(req) {
             Notes: Notes ?? match.Notes,
             Timestamp: new Date().toLocaleString("en-US")
         });
-        // Update consumption entry: delete old, write new
-        const { getPrivateData } = await __turbopack_context__.A("[project]/lib/sheets.js [app-route] (ecmascript, async loader)");
-        const data = await getPrivateData();
-        const oldEntries = (data.daily || []).filter((r)=>r.Tin_ID === match.Tin_ID && r.For_someone_else?.toLowerCase() === match.Name?.toLowerCase() && r.Notes === "share_claim").reverse();
-        for (const r of oldEntries)if (r.__rowIndex) await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["deleteRowFromSheet"])("daily_consumption", r.__rowIndex);
-        if (newStatus === "Claimed") {
-            await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$sheets$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["appendRowToSheet"])("daily_consumption", {
-                Tin_ID: match.Tin_ID,
-                Date: date,
-                Brand: match.Brand,
-                Type: match.Product_Type || "",
-                Name: match.Product_Name,
-                Grams_Used: requested,
-                For_someone_else: match.Name,
-                Latte: "",
-                Usucha: "",
-                Combo: "",
-                New_tin_opened: "",
-                Finished_tin_today: "",
-                Notes: "share_claim"
-            });
-        }
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
             ok: true,
             status: newStatus
