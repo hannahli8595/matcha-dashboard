@@ -15,7 +15,10 @@ export const CONSUMABLE_TYPES = ["Matcha","Hojicha","Gyokuro","Sencha","Other Te
 export function isConsumable(r) { return CONSUMABLE_TYPES.includes(r.Product_Type); }
 export function isSelfConsumption(row) {
   const v = row["For_someone_else"] || row["For_someone_else?"] || "";
-  return v.toLowerCase() !== "y";
+  if (v.trim() !== "") return false;
+  // also treat share_claim notes as not-self (handles old rows with empty For_someone_else)
+  if (row["Notes"]?.trim().toLowerCase() === "share_claim") return false;
+  return true;
 }
 export function hasAffiliate(r) {
   const v = (r["Affiliate?"] || r["Affiliate"] || "").trim().toLowerCase();

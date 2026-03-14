@@ -961,11 +961,12 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
   const allClaimed = claims.filter(c=>c.Status?.toLowerCase()==="claimed");
   const personTotals = {};
   allClaimed.forEach(c=>{
+    const key = c.Name?.trim() || "Unknown";
     const g = parseFloat(c.Grams_Claimed)||0;
-    if(!personTotals[c.Name]) personTotals[c.Name]={name:c.Name,grams:0,items:[]};
-    personTotals[c.Name].grams += g;
-    const label = [c.Brand, c.Product_Name].filter(Boolean).join(" — ") || c.Tin_ID;
-    personTotals[c.Name].items.push(`${g}g ${label}`);
+    if(!personTotals[key]) personTotals[key]={name:key,grams:0,items:[]};
+    personTotals[key].grams += g;
+    const label = [c.Brand, c.Product_Name].filter(Boolean).join(" — ") || c.Tin_ID || "";
+    personTotals[key].items.push(`${g}g ${label}`);
   });
 
   return <div style={{display:"flex",flexDirection:"column",gap:24}}>
@@ -1037,7 +1038,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
                   </td>
                   <td style={{padding:"8px 10px",fontWeight:600,color:C.moss}}>{s.name||"—"}</td>
                   <td style={{padding:"8px 10px",color:C.moss}}>{s.grams}g</td>
-                  <td style={{padding:"8px 10px",fontSize:10}}>{(()=>{const sh=shippingFor(s.grams,l,raw_data);return <><span style={{color:C.moss,fontWeight:600}}>${sh.cost.toFixed(2)}</span><span style={{color:C.mist,display:"block",fontSize:9}}>{sh.method}</span></>;})()} </td>
+                  <td style={{padding:"8px 10px",fontSize:10}}>{(()=>{const sh=shippingFor(s.grams);return <><span style={{color:C.moss,fontWeight:600}}>${sh.cost.toFixed(2)}</span><span style={{color:C.mist,display:"block",fontSize:9}}>{sh.method}</span></>;})()} </td>
                   <td style={{padding:"8px 10px"}}>
                     <span style={{fontSize:9,padding:"2px 7px",borderRadius:1,background:"#e8f2e0",color:C.moss,border:`1px solid ${C.moss}`,fontWeight:600}}>
                       {hasClaim?"✓ Claimed":"Suggested"}
@@ -1099,9 +1100,9 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
               <td style={{padding:"10px 14px"}}>{p.grams}g</td>
               <td style={{padding:"10px 14px",fontWeight:700,color:C.moss}}>
                 ${Math.ceil(p.grams/28).toFixed(2)}
-                <div style={{fontSize:9,color:C.mist,fontWeight:400}}>{p.methods.join(" + ")}</div>
+
               </td>
-              <td style={{padding:"10px 14px",color:C.stone,fontSize:10,lineHeight:1.6}}>{p.items.join(", ")}</td>
+              <td style={{padding:"10px 14px",color:C.stone,fontSize:10,lineHeight:1.6}}>{(p.items||[]).join(", ")}</td>
             </tr>
           ))}
           <tr style={{background:C.parchment,borderTop:`2px solid ${C.warm}`}}>

@@ -103,6 +103,46 @@ export async function POST(req) {
 
     await appendRowToSheet("share_claims", row);
 
+    // Write daily_consumption row for this claim (only if Claimed, not Waitlist)
+    if (status === "Claimed") {
+      const { getPrivateData } = await import("@/lib/sheets");
+      const privateData = await getPrivateData();
+      const rawTin = (privateData.raw_data || []).find(r => r.Tin_ID === Tin_ID);
+      const tinStatus = rawTin?.Status || "";
+      const isFirstLog = !(privateData.daily || []).some(d => d.Tin_ID === Tin_ID);
+      const allClaimed = claims
+        .filter(c => c.Tin_ID === Tin_ID && c.Status?.toLowerCase() === "claimed")
+        .reduce((s, c) => s + (parseFloat(c.Grams_Claimed) || 0), 0);
+      const tinWeight = parseFloat(rawTin?.Tin_Weight_g || 0);
+      const totalAfter = allClaimed + requested;
+      const isFinished = tinWeight > 0 && totalAfter >= tinWeight * 0.95;
+
+      const consumptionRow = {
+        Tin_ID,
+        Date: new Date().toLocaleDateString("en-US"),
+        Brand: Brand || listing.Brand || "",
+        Type: listing.Product_Type || "",
+        Name: listing.Product_Name || "",
+        Grams_Used: requested,
+        For_someone_else: Name.trim(),
+        Latte: "", Usucha: "", Combo: "",
+        New_tin_opened: (isFirstLog && tinStatus === "Unopened") ? "y" : "",
+        Finished_tin_today: isFinished ? "y" : "",
+        Notes: "share_claim",
+      };
+      await appendRowToSheet("daily_consumption", consumptionRow);
+
+      // Update raw_data tin status if needed
+      if (rawTin && isFirstLog && tinStatus === "Unopened") {
+        const { updateRowInSheet: updateRow } = await import("@/lib/sheets");
+        await updateRow("raw_data", rawTin.__rowIndex, { ...rawTin, Status: "Opened" });
+      }
+      if (rawTin && isFinished && tinStatus !== "Finished") {
+        const { updateRowInSheet: updateRow } = await import("@/lib/sheets");
+        await updateRow("raw_data", rawTin.__rowIndex, { ...rawTin, Status: "Finished" });
+      }
+    }
+
     return NextResponse.json({ ok: true, status, isWaitlist: status === "Waitlist" });
   } catch (err) {
     console.error("Share POST error:", err);
