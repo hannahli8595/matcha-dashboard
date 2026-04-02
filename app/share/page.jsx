@@ -393,7 +393,7 @@ export default function SharePage() {
   const [refresh,setRefresh]      = useState(0);
   const [showSubmit,setShowSubmit]= useState(false);
   const [submitted,setSubmitted]  = useState(false);
-  const [sortBy,setSortBy]        = useState("default"); // "default"|"az"|"remaining"
+  const [sortBy,setSortBy]        = useState("az");
 
   useEffect(()=>{
     try{const n=sessionStorage.getItem("share_name");if(n)setMyName(n);}catch{}
@@ -436,9 +436,9 @@ export default function SharePage() {
       const bSoldOut = bAvail>0 && bClaims>=bAvail;
       if(aSoldOut && !bSoldOut) return 1;
       if(!aSoldOut && bSoldOut) return -1;
-      if(sortBy==="az") return (a.Brand||"").localeCompare(b.Brand||"");
       if(sortBy==="remaining") return (bAvail-bClaims)-(aAvail-aClaims);
-      return 0;
+      // default: az
+      return (a.Brand||"").localeCompare(b.Brand||"") || (a.Product_Name||"").localeCompare(b.Product_Name||"");
     });
   const availableTabs=TYPE_TABS.filter(tab=>tab==="All"||listings.some(l=>typeTab(l,tab)));
 
@@ -497,7 +497,7 @@ export default function SharePage() {
 
         {!loading&&filtered.length>0&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:12}}>
           <span style={{fontSize:10,color:C.stone}}>Sort:</span>
-          {[["default","Default"],["az","A–Z"],["remaining","Most left"]].map(([v,l])=>(
+          {[["az","A–Z"],["remaining","Most left"]].map(([v,l])=>(
             <button key={v} onClick={()=>setSortBy(v)} style={{padding:"3px 10px",fontSize:10,border:`1px solid ${sortBy===v?C.moss:C.warm}`,background:sortBy===v?C.moss:"transparent",color:sortBy===v?C.cream:C.stone,borderRadius:1,cursor:"pointer"}}>{l}</button>
           ))}
         </div>}

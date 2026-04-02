@@ -171,11 +171,12 @@ function buildTinId(brand, name, dateReceived) {
   return `${slug(brand)}-${slug(name)}-${d}`;
 }
 
-function LogEntryModal({tins, onSave, onClose, saving}) {
+function LogEntryModal({tins, shareData, shareGramsMap, onSave, onClose, saving}) {
   const g = useG();
+  const listings = shareData?.listings || [];
   const activeTins = tins
-    .filter(t => isConsumableExt(t) && (t.Status==="Opened" || t.Status==="Unopened"))
-    .sort((a,b) => ({Opened:0,Unopened:1}[a.Status]??9) - ({Opened:0,Unopened:1}[b.Status]??9) || a.Brand.localeCompare(b.Brand));
+    .filter(t => isConsumableExt(t) && ["Opened","Unopened","Pending"].includes(t.Status))
+    .sort((a,b) => a.Brand.localeCompare(b.Brand) || (a.Product_Name||"").localeCompare(b.Product_Name||""));
 
   const initFromTin = t => ({
     Tin_ID: t?.Tin_ID||"",
@@ -229,12 +230,21 @@ function LogEntryModal({tins, onSave, onClose, saving}) {
     {/* Pick from inventory OR fill manually */}
     <Field label="Pick from Inventory">
       <select value={form.Tin_ID} onChange={e=>onTinSelect(e.target.value)} style={inp}>
-        <option value="">— Select a tin —</option>
-        {activeTins.map(t=>(
-          <option key={t.Tin_ID} value={t.Tin_ID}>
-            {t.Brand} — {t.Product_Name} ({t.Status})
-          </option>
-        ))}
+        <option value="">— select a tin —</option>
+        {activeTins.map((t,i)=>{
+          const gl = shareGramsMap?.[t.Tin_ID];
+          const listing = listings.find(l=>l.Tin_ID===t.Tin_ID&&l.Active?.toLowerCase()==="y");
+          const listedG = listing ? parseFloat(listing.Grams_Available)||0 : 0;
+          const tinW = parseFloat(t.Tin_Weight_g)||0;
+          let gramsInfo = "";
+          if(t.Status==="Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g` : "";
+          else if(t.Status==="Unopened") gramsInfo = tinW ? `, ${tinW}g` : "";
+          else if(t.Status==="Pending") gramsInfo = tinW ? `, ${tinW}g` : "";
+          const listedInfo = listedG>0 ? ` · ${listedG}g listed` : "";
+          return <option key={t.Tin_ID||`__idx__${i}`} value={t.Tin_ID}>
+            {t.Brand} — {t.Product_Name} ({t.Status}{gramsInfo}{listedInfo})
+          </option>;
+        })}
         <option value="__other__">Other / not in inventory</option>
       </select>
     </Field>
@@ -400,6 +410,7 @@ function AddTinModal({onSave, onClose, saving, existingTins=[]}) {
     </div>
 
     {isPR && <div style={g.col2}>
+      <Field label="Date of Contact"><input type="date" style={inp} value={form.Date_of_contact} onChange={e=>set("Date_of_contact",e.target.value)}/></Field>
       <Field label="Post Obligation"><input style={inp} value={form["Obligation?"]} onChange={e=>set("Obligation?",e.target.value)} placeholder="e.g. 1 post"/></Field>
       <Field label="Affiliate Link"><input style={inp} value={form["Affiliate?"]} onChange={e=>set("Affiliate?",e.target.value)} placeholder="y / link / blank"/></Field>
     </div>}
@@ -779,7 +790,7 @@ function parseSuggestions(raw) {
   try { return JSON.parse(raw||"[]"); } catch { return []; }
 }
 
-function AddListingModal({ raw_data, onClose, onSave, initial }) {
+function AddListingModal({ raw_data, listings=[], onClose, onSave, initial }) {
   const g = useG();
   const CONSUMABLE_EXT = ["Matcha","Hojicha","Gyokuro","Sencha","Mugwort","Other Tea"];
   const STATUS_ORDER = {"Opened":0,"Unopened":1,"Pending":2};
@@ -856,7 +867,9 @@ function AddListingModal({ raw_data, onClose, onSave, initial }) {
           if (st === "Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g tin` : "";
           else if (st === "Unopened") gramsInfo = tinW ? `, ${tinW}g` : "";
           else if (st === "Pending") gramsInfo = tinW ? `, ${tinW}g` : "";
-          return <option key={optVal} value={optVal}>{r.Brand} — {r.Product_Name} ({st}{gramsInfo})</option>;
+          const isListed = listings?.find ? listings.find(l=>l.Tin_ID===r.Tin_ID&&l.Active?.toLowerCase()==="y") : false;
+          const listedMark = isListed ? " ★" : "";
+          return <option key={optVal} value={optVal}>{r.Brand} — {r.Product_Name} ({st}{gramsInfo}){listedMark}</option>;
         })}
       </select>
     </Field>
@@ -967,7 +980,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
   useEffect(()=>{ loadShare(); },[loadShare]);
 
   const [saveErr, setSaveErr] = useState("");
-  const [shareSort, setShareSort] = useState("default"); // "default"|"az"|"remaining"|"claimed"
+  const [shareSort, setShareSort] = useState("az"); // "az"|"remaining"|"claimed"
 
   async function handleSaveListing(form) {
     setSaveErr("");
@@ -1140,7 +1153,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
 
     {listings.length>0&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:12}}>
       <span style={{fontSize:10,color:C.mist,marginRight:4}}>Sort:</span>
-      {[["default","Default"],["az","A–Z"],["remaining","Most remaining"],["claimed","Most claimed"]].map(([v,l])=>(
+      {[["az","A–Z"],["remaining","Most remaining"],["claimed","Most claimed"]].map(([v,l])=>(
         <button key={v} onClick={()=>setShareSort(v)} style={{padding:"3px 10px",fontSize:10,border:`1px solid ${shareSort===v?C.moss:C.warm}`,background:shareSort===v?C.moss:"transparent",color:shareSort===v?C.cream:C.stone,borderRadius:1,cursor:"pointer"}}>{l}</button>
       ))}
     </div>}
@@ -1184,6 +1197,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
     {(shareModal?.type==="add"||shareModal?.type==="edit")&&
       <AddListingModal
         raw_data={raw_data}
+        listings={listings}
         initial={shareModal.listing||null}
         onClose={()=>setShareModal(null)}
         onSave={handleSaveListing}
@@ -1607,7 +1621,7 @@ function PrivateDashboard() {
 
     {toast&&<div style={{position:"fixed",top:20,right:24,zIndex:2000,background:toast.type==="error"?C.red:C.moss,color:C.cream,padding:"12px 20px",fontSize:12,borderRadius:2}}>{toast.msg}</div>}
     {pendingSyncs.length>0&&<StatusSyncModal updates={pendingSyncs} onApply={handleApplySync} onClose={()=>setPendingSyncs([])} saving={saving}/>}
-    {modal==="log"&&<LogEntryModal tins={raw_data} onSave={handleLogSave} onClose={()=>setModal(null)} saving={saving}/>}
+    {modal==="log"&&<LogEntryModal tins={raw_data} shareData={shareData} shareGramsMap={gramsMap} onSave={handleLogSave} onClose={()=>setModal(null)} saving={saving}/>}
     {modal==="addTin"&&<AddTinModal onSave={handleAddTinSave} onClose={()=>setModal(null)} saving={saving} existingTins={raw_data}/>}
     {modal==="addCash"&&<AddCashModal onSave={handleCashSave} onClose={()=>setModal(null)} saving={saving}/>}
     {modal==="addCode"&&<AddCodeModal onSave={handleCodeSave} onClose={()=>setModal(null)} saving={saving}/>}
