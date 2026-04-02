@@ -793,7 +793,8 @@ function AddListingModal({ raw_data, onClose, onSave, initial }) {
   const [suggestions, setSuggestions] = useState(()=>parseSuggestions(initial?.Suggestions));
   const [gramsMap, setGramsMap] = useState({});
   const [saving, setSaving]     = useState(false);
-  const selected = raw_data.find(r=>r.Tin_ID===tinId)||{};
+  const [pendingTinRef, setPendingTinRef] = useState(null);
+  const selected = raw_data.find(r=>r.Tin_ID===tinId) || pendingTinRef || {};
   const inpFull = {...inp, width:"100%"};
 
   useEffect(()=>{
@@ -810,7 +811,7 @@ function AddListingModal({ raw_data, onClose, onSave, initial }) {
   const avail     = parseFloat(gramsAvail)||0;
 
   async function handleSave() {
-    if(!tinId||!gramsAvail) return;
+    if((!tinId&&!pendingTinRef)||!gramsAvail) return;
     setSaving(true);
     await onSave({
       Tin_ID:tinId, Grams_Available:gramsAvail, Notes:notes, Active:active,
@@ -832,18 +833,30 @@ function AddListingModal({ raw_data, onClose, onSave, initial }) {
 
   return <Modal title={initial?"Edit Listing":"Add to Share Drop"} onClose={onClose}>
     <Field label="Select Tin">
-      <select style={inpFull} value={tinId} onChange={e=>{ e.stopPropagation(); setTinId(e.target.value); }}>
+      <select style={inpFull} value={tinId||""} onChange={e=>{
+          e.stopPropagation();
+          const val = e.target.value;
+          if(val.startsWith("__row__")){
+            const r = options.find(o=>(o.Tin_ID||`__row__${o.__rowIndex}`)===val);
+            setTinId(val);
+            if(r) setPendingTinRef(r);
+          } else {
+            setTinId(val);
+            setPendingTinRef(null);
+          }
+        }}>
         <option value="">— choose a tin —</option>
         {options.map((r,i)=>{
           const gl = gramsMap[r.Tin_ID];
           const st = r.Status || "";
           const tinW = parseFloat(r.Tin_Weight_g)||0;
-          let label = "";
-          if (st === "Opened") label = gl!=null ? ` — ${Math.round(gl)}g left` : tinW ? ` — ${tinW}g tin` : ` (Opened)`;
-          else if (st === "Unopened") label = tinW ? ` — ${tinW}g (full, unopened)` : ` (Unopened)`;
-          else if (st === "Pending") label = tinW ? ` — ${tinW}g (pending)` : ` (Pending, weight TBD)`;
-          const statusDot = st==="Opened"?"🟢":st==="Unopened"?"⚪":st==="Pending"?"🟡":"";
-          return <option key={`${r.Tin_ID||"blank"}-${i}`} value={r.Tin_ID}>{statusDot} {r.Brand} — {r.Product_Name}{label}</option>;
+          // Use __rowIndex as stable fallback for items with no Tin_ID
+          const optVal = r.Tin_ID || `__row__${r.__rowIndex||i}`;
+          let gramsInfo = "";
+          if (st === "Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g tin` : "";
+          else if (st === "Unopened") gramsInfo = tinW ? `, ${tinW}g` : "";
+          else if (st === "Pending") gramsInfo = tinW ? `, ${tinW}g` : "";
+          return <option key={optVal} value={optVal}>{r.Brand} — {r.Product_Name} ({st}{gramsInfo})</option>;
         })}
       </select>
     </Field>

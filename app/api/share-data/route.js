@@ -14,7 +14,10 @@ export async function GET(req) {
     const isOwner = session?.user?.isOwner;
     const { listings, claims } = await getShareData();
     if (isOwner) return NextResponse.json({ listings, claims });
-    const activeListings = listings.filter(l => l.Active?.toLowerCase() === "y");
+    const activeListings = listings.filter(l =>
+      l.Active?.toLowerCase() === "y" &&
+      parseFloat(l.Grams_Available) > 0
+    );
     return NextResponse.json({ listings: activeListings, claims });
   } catch (err) {
     console.error("Share GET error:", err);
