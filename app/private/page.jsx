@@ -782,7 +782,10 @@ function parseSuggestions(raw) {
 function AddListingModal({ raw_data, onClose, onSave, initial }) {
   const g = useG();
   const CONSUMABLE_EXT = ["Matcha","Hojicha","Gyokuro","Sencha","Mugwort","Other Tea"];
-  const options = raw_data.filter(r => CONSUMABLE_EXT.includes(r.Product_Type));
+  const STATUS_ORDER = {"Opened":0,"Unopened":1,"Pending":2};
+  const options = raw_data
+    .filter(r => CONSUMABLE_EXT.includes(r.Product_Type) && !["Finished","Gave Away"].includes(r.Status))
+    .sort((a,b)=>(STATUS_ORDER[a.Status]??9)-(STATUS_ORDER[b.Status]??9)||(a.Brand||"").localeCompare(b.Brand||""));
   const [tinId, setTinId]       = useState(initial?.Tin_ID||"");
   const [gramsAvail, setGramsAvail] = useState(String(initial?.Grams_Available||""));
   const [notes, setNotes]       = useState(initial?.Notes||"");
@@ -833,16 +836,39 @@ function AddListingModal({ raw_data, onClose, onSave, initial }) {
         <option value="">— choose a tin —</option>
         {options.map((r,i)=>{
           const gl = gramsMap[r.Tin_ID];
-          const label = gl!=null ? ` (${Math.round(gl)}g left)` : r.Status ? ` (${r.Status})` : "";
-          return <option key={`${r.Tin_ID||"blank"}-${i}`} value={r.Tin_ID}>{r.Brand} — {r.Product_Name}{label}</option>;
+          const st = r.Status || "";
+          const tinW = parseFloat(r.Tin_Weight_g)||0;
+          let label = "";
+          if (st === "Opened") label = gl!=null ? ` — ${Math.round(gl)}g left` : tinW ? ` — ${tinW}g tin` : ` (Opened)`;
+          else if (st === "Unopened") label = tinW ? ` — ${tinW}g (full, unopened)` : ` (Unopened)`;
+          else if (st === "Pending") label = tinW ? ` — ${tinW}g (pending)` : ` (Pending, weight TBD)`;
+          const statusDot = st==="Opened"?"🟢":st==="Unopened"?"⚪":st==="Pending"?"🟡":"";
+          return <option key={`${r.Tin_ID||"blank"}-${i}`} value={r.Tin_ID}>{statusDot} {r.Brand} — {r.Product_Name}{label}</option>;
         })}
       </select>
     </Field>
     {tinId && <div style={{background:C.parchment,border:`1px solid ${C.warm}`,borderRadius:1,padding:"10px 14px",fontSize:11,color:C.stone,display:"flex",flexDirection:"column",gap:4}}>
-      {gramsLeft!=null&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{color:C.ink,fontWeight:600}}>{Math.round(gramsLeft)}g remaining</span>
-        {tinWeight>0&&<span style={{color:C.mist,fontSize:10}}>{Math.round((gramsLeft/tinWeight)*100)}% of {tinWeight}g tin</span>}
-      </div>}
+      {(()=>{
+        const st = selected.Status || "";
+        if (st === "Pending") return <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:C.gold,fontWeight:600}}>🟡 Pending arrival</span>
+          {tinWeight>0&&<span style={{color:C.mist,fontSize:10}}>{tinWeight}g tin</span>}
+        </div>;
+        if (st === "Unopened") return <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:C.accent,fontWeight:600}}>Full tin — {tinWeight>0?tinWeight+"g":"weight unknown"}</span>
+          <span style={{color:C.mist,fontSize:10}}>Unopened</span>
+        </div>;
+        if (gramsLeft!=null) {
+          const consumed = tinWeight > 0 ? tinWeight - gramsLeft : 0;
+          return <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{color:C.ink,fontWeight:600}}>{Math.round(gramsLeft)}g remaining</span>
+              {tinWeight>0&&<span style={{color:C.mist,fontSize:10}}>{tinWeight}g tin · {Math.round(consumed)}g used</span>}
+            </div>
+          </div>;
+        }
+        return null;
+      })()}
       {selected.Origin&&<div><span style={{color:C.mist}}>Origin: </span>{selected.Origin}</div>}
       {selected["Disclosed_Cultivars_(Matcha)"]&&<div><span style={{color:C.mist}}>Cultivar: </span>{selected["Disclosed_Cultivars_(Matcha)"]}</div>}
       {selected["Price/g"]&&<div><span style={{color:C.mist}}>$/g: </span>{selected["Price/g"]}</div>}
@@ -928,6 +954,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
   useEffect(()=>{ loadShare(); },[loadShare]);
 
   const [saveErr, setSaveErr] = useState("");
+  const [shareSort, setShareSort] = useState("default"); // "default"|"az"|"remaining"|"claimed"
 
   async function handleSaveListing(form) {
     setSaveErr("");
@@ -989,7 +1016,25 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
     </div>}
     {shareLoading && <div style={{color:C.mist,fontSize:11,padding:"24px 0",textAlign:"center"}}>Loading…</div>}
 
-    {listings.map((l,li)=>{
+    {(()=>{
+      const sorted = [...listings].sort((a,b)=>{
+        const aClaimed = gramsFor(a.Tin_ID,"claimed");
+        const bClaimed = gramsFor(b.Tin_ID,"claimed");
+        const aAvail = parseFloat(a.Grams_Available)||0;
+        const bAvail = parseFloat(b.Grams_Available)||0;
+        const aSoldOut = aAvail>0 && aClaimed>=aAvail;
+        const bSoldOut = bAvail>0 && bClaimed>=bAvail;
+        // Always push sold-out to end
+        if(aSoldOut && !bSoldOut) return 1;
+        if(!aSoldOut && bSoldOut) return -1;
+        if(shareSort==="az") return (a.Brand||"").localeCompare(b.Brand||"");
+        if(shareSort==="remaining") return (bAvail-bClaimed)-(aAvail-aClaimed);
+        if(shareSort==="claimed") return bClaimed-aClaimed;
+        return 0;
+      });
+      return sorted;
+    })().map((l,li)=>{
+      const soldOut = (()=>{ const cl=gramsFor(l.Tin_ID,"claimed"); const av=parseFloat(l.Grams_Available)||0; return av>0&&cl>=av; })();
       const lClaims   = claimsByTin(l.Tin_ID,"claimed");
       const lWaitlist = claimsByTin(l.Tin_ID,"waitlist");
       const claimed   = gramsFor(l.Tin_ID,"claimed");
@@ -997,7 +1042,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
       const remaining = Math.max(available-claimed,0);
       const active    = l.Active?.toLowerCase()==="y";
       const suggestions = parseSuggestions(l.Suggestions);
-      return <div key={li} style={{...card,padding:0,overflow:"hidden",opacity:active?1:0.65,border:`1px solid ${C.warm}`}}>
+      return <div key={li} style={{...card,padding:0,overflow:"hidden",opacity:!active?0.55:soldOut?0.7:1,border:`1px solid ${soldOut?C.mist:C.warm}`}}>
         <div style={{display:"flex",alignItems:"center",gap:14,padding:"14px 20px",background:active?C.ink:C.stone}}>
           <div style={{flex:1}}>
             <div style={{fontSize:11,color:C.mist,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>{l.Product_Type||"Tea"}</div>
@@ -1079,6 +1124,13 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
         </div>
       </div>;
     })}
+
+    {listings.length>0&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:12}}>
+      <span style={{fontSize:10,color:C.mist,marginRight:4}}>Sort:</span>
+      {[["default","Default"],["az","A–Z"],["remaining","Most remaining"],["claimed","Most claimed"]].map(([v,l])=>(
+        <button key={v} onClick={()=>setShareSort(v)} style={{padding:"3px 10px",fontSize:10,border:`1px solid ${shareSort===v?C.moss:C.warm}`,background:shareSort===v?C.moss:"transparent",color:shareSort===v?C.cream:C.stone,borderRadius:1,cursor:"pointer"}}>{l}</button>
+      ))}
+    </div>}
 
     {listings.length===0&&!shareLoading&&<div style={{...card,textAlign:"center",padding:"48px 24px",color:C.mist,border:`1px solid ${C.warm}`}}>
       No listings yet. Click "+ Add Listing" to add items to your share drop.
@@ -1307,7 +1359,7 @@ function PrivateDashboard() {
   const vizDaily=vizType==="All"?selfDaily:selfDaily.filter(d=>d.Type===vizType);
   const vizSelfDaily=vizDaily;
   const consumableTins=raw_data.filter(isConsumable);
-  const pendingItems=raw_data.filter(r=>r.Status?.trim().toLowerCase()==="pending"&&isConsumableExt(r));
+  const pendingItems=raw_data.filter(r=>r.Status?.trim().toLowerCase()==="pending");
   const chartTypes=[...new Set(selfDaily.map(d=>d.Type).filter(Boolean))].sort();
 
   const totalGrams=vizDaily.reduce((s,d)=>s+parseGrams(d.Grams_Used),0);
@@ -1432,15 +1484,15 @@ function PrivateDashboard() {
         if(!inLog){const idx=updatedRaw.findIndex(r=>r.Tin_ID===form.Tin_ID);if(idx!==-1&&updatedRaw[idx].Status==="Unopened"){const u={...updatedRaw[idx],Status:"Opened"};await apiUpdate(SHEETS.raw_data,u.__rowIndex,u);updatedRaw=updatedRaw.map((r,i)=>i===idx?u:r);}}
         if(form["Finished_tin_today"]==="y"){const idx=updatedRaw.findIndex(r=>r.Tin_ID===form.Tin_ID);if(idx!==-1&&updatedRaw[idx].Status!=="Finished"){const u={...updatedRaw[idx],Status:"Finished"};await apiUpdate(SHEETS.raw_data,u.__rowIndex,u);updatedRaw=updatedRaw.map((r,i)=>i===idx?u:r);}}
       }
-      setSheetData(d=>({...d,daily:[...d.daily,{...form,__rowIndex:d.daily.length+2}],raw_data:updatedRaw}));
       setModal(null);showToast("Entry logged ✓");
+      await loadData();
     }catch(e){showToast("Error saving","error");}
     setSaving(false);
   }
 
   async function handleAddTinSave(form){
     setSaving(true);
-    try{await apiAppend(SHEETS.raw_data,form);setSheetData(d=>({...d,raw_data:[...d.raw_data,{...form,__rowIndex:d.raw_data.length+2}]}));setModal(null);showToast("Item added ✓");}
+    try{await apiAppend(SHEETS.raw_data,form);setModal(null);showToast("Item added ✓");await loadData();}
     catch(e){showToast("Error saving","error");}
     setSaving(false);
   }
@@ -1452,13 +1504,14 @@ function PrivateDashboard() {
       // Normalise YYYY-MM-DD date inputs back to MM/DD/YYYY for sheet storage
       const toSheet=v=>v?.match(/^(\d{4})-(\d{2})-(\d{2})$/)?`${v.slice(5,7)}/${v.slice(8,10)}/${v.slice(0,4)}`:v;
       let cleaned=Object.fromEntries(Object.entries(form).map(([k,v])=>[k,DATE_FIELDS.has(k)?toSheet(v):v]));
-      // Non-consumables that have been received should not carry a Status value
-      if(sheetKey==="raw_data"&&!isConsumableExt(cleaned)&&cleaned.Date_received?.trim()){
+      // Non-consumables: "Unopened" is not valid (nothing to open), clear it
+      if(sheetKey==="raw_data"&&!isConsumableExt(cleaned)&&cleaned.Status==="Unopened"){
         cleaned={...cleaned,Status:""};
       }
       await apiUpdate(sheetName,cleaned.__rowIndex,cleaned);
-      setSheetData(d=>({...d,[sheetKey]:d[sheetKey].map(r=>r.__rowIndex===cleaned.__rowIndex?cleaned:r)}));
       setModal(null);showToast("Saved ✓");
+      // Reload to get fresh row indices after any sheet changes
+      await loadData();
     }catch(e){showToast("Error saving","error");}
     setSaving(false);
   }

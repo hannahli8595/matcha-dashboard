@@ -237,7 +237,7 @@ function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submit
 }
 
 // ── Listing card ──────────────────────────────────────────────────────────────
-function ListingCard({ listing, claims, myName, onClaimDone, onNeedName }) {
+function ListingCard({ listing, claims, myName, onClaimDone, onNeedName, isSoldOut=false }) {
   const suggestions  = parseSuggestions(listing.Suggestions);
   const tinClaims    = claims.filter(c=>c.Tin_ID===listing.Tin_ID&&c.Status?.toLowerCase()==="claimed");
   const waitClaims   = claims.filter(c=>c.Tin_ID===listing.Tin_ID&&c.Status?.toLowerCase()==="waitlist");
@@ -303,7 +303,7 @@ function ListingCard({ listing, claims, myName, onClaimDone, onNeedName }) {
   const fc = flash ? flashColors[flash] : null;
 
   return (
-    <div style={{background:C.cream,border:`1px solid ${C.warm}`,borderRadius:2,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+    <div style={{background:C.cream,border:`1px solid ${C.warm}`,borderRadius:2,overflow:"hidden",display:"flex",flexDirection:"column",opacity:isSoldOut&&!myClaim?0.55:1}}>
       <div style={{background:C.ink,padding:"16px 20px"}}>
         <div style={{fontSize:10,color:C.mist,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{listing.Product_Type||"Tea"}</div>
         <div style={{fontSize:16,fontFamily:serif,fontWeight:700,color:C.cream,lineHeight:1.2}}>{listing.Brand}</div>
@@ -393,6 +393,7 @@ export default function SharePage() {
   const [refresh,setRefresh]      = useState(0);
   const [showSubmit,setShowSubmit]= useState(false);
   const [submitted,setSubmitted]  = useState(false);
+  const [sortBy,setSortBy]        = useState("default"); // "default"|"az"|"remaining"
 
   useEffect(()=>{
     try{const n=sessionStorage.getItem("share_name");if(n)setMyName(n);}catch{}
@@ -424,7 +425,21 @@ export default function SharePage() {
     }catch{}
   }
 
-  const filtered=listings.filter(l=>typeTab(l,activeTab));
+  const filtered = listings
+    .filter(l=>typeTab(l,activeTab))
+    .sort((a,b)=>{
+      const aClaims = claims.filter(c=>c.Tin_ID===a.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+      const bClaims = claims.filter(c=>c.Tin_ID===b.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+      const aAvail = parseFloat(a.Grams_Available)||0;
+      const bAvail = parseFloat(b.Grams_Available)||0;
+      const aSoldOut = aAvail>0 && aClaims>=aAvail;
+      const bSoldOut = bAvail>0 && bClaims>=bAvail;
+      if(aSoldOut && !bSoldOut) return 1;
+      if(!aSoldOut && bSoldOut) return -1;
+      if(sortBy==="az") return (a.Brand||"").localeCompare(b.Brand||"");
+      if(sortBy==="remaining") return (bAvail-bClaims)-(aAvail-aClaims);
+      return 0;
+    });
   const availableTabs=TYPE_TABS.filter(tab=>tab==="All"||listings.some(l=>typeTab(l,tab)));
 
   return <>
@@ -480,6 +495,12 @@ export default function SharePage() {
           <button onClick={()=>setShowNM(true)} style={{color:C.moss,background:"none",border:"none",cursor:"pointer",fontFamily:font,fontSize:11,fontWeight:600,textDecoration:"underline"}}>Let's go →</button>
         </div>}
 
+        {!loading&&filtered.length>0&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:12}}>
+          <span style={{fontSize:10,color:C.stone}}>Sort:</span>
+          {[["default","Default"],["az","A–Z"],["remaining","Most left"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setSortBy(v)} style={{padding:"3px 10px",fontSize:10,border:`1px solid ${sortBy===v?C.moss:C.warm}`,background:sortBy===v?C.moss:"transparent",color:sortBy===v?C.cream:C.stone,borderRadius:1,cursor:"pointer"}}>{l}</button>
+          ))}
+        </div>}
         {loading?<div style={{textAlign:"center",padding:"60px 0",color:C.mist}}>Loading…</div>
         :filtered.length===0?<div style={{textAlign:"center",padding:"60px 0"}}>
             <div style={{fontSize:20,fontFamily:serif,color:C.stone,marginBottom:8}}>
@@ -488,11 +509,17 @@ export default function SharePage() {
             <div style={{fontSize:11,color:C.mist}}>{listings.length>0?"Try a different tab.":"Check back soon."}</div>
           </div>
         :<div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:mobile?12:16}}>
-            {filtered.map((l,i)=>(
-              <ListingCard key={l.Tin_ID||i} listing={l} claims={claims} myName={myName}
-                onClaimDone={()=>setRefresh(r=>r+1)}
-                onNeedName={()=>setShowNM(true)}/>
-            ))}
+            {filtered.map((l,i)=>{
+              const tinClaims=claims.filter(c=>c.Tin_ID===l.Tin_ID&&c.Status?.toLowerCase()==="claimed");
+              const totalClaimed=tinClaims.reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+              const isSoldOut=totalClaimed>=(parseFloat(l.Grams_Available)||0)&&(parseFloat(l.Grams_Available)||0)>0;
+              return <div key={l.Tin_ID||i} style={{opacity:isSoldOut?0.55:1}}>
+                <ListingCard listing={l} claims={claims} myName={myName}
+                  isSoldOut={isSoldOut}
+                  onClaimDone={()=>setRefresh(r=>r+1)}
+                  onNeedName={()=>setShowNM(true)}/>
+              </div>;
+            })}
           </div>}
 
         {!loading&&listings.length>0&&<div style={{marginTop:28,fontSize:10,color:C.mist,lineHeight:1.8}}>
