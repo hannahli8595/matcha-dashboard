@@ -1609,6 +1609,11 @@ function PrivateDashboard() {
   const totalSpend=raw_data.filter(r=>r.How_I_obtained?.toLowerCase().includes("purchas")).reduce((s,r)=>s+parsePrice(r.Retail_Price),0);
   const avgPricePerG=(()=>{const v=consumableTins.map(r=>parseFloat((r["Price/g"]||"").replace("$",""))).filter(n=>n>0);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2):"—";})();
 
+  const consumedMap=useMemo(()=>{
+    const m={};
+    daily.forEach(d=>{if(d.Tin_ID){m[d.Tin_ID]=(m[d.Tin_ID]||0)+(parseFloat(d.Grams_Used)||0);}});
+    return m;
+  },[daily]);
   const stockCounts=["Opened","Unopened","Finished","Pending","Gave Away"].reduce((acc,s)=>{const n=consumableTins.filter(r=>r.Status===s).length;if(n>0)acc[s]=n;return acc;},{});
   const weekMap={};
   vizDaily.forEach(d=>{const w=weekLabel(d.Date);if(w)weekMap[w]=(weekMap[w]||0)+parseGrams(d.Grams_Used);});
@@ -1649,6 +1654,19 @@ function PrivateDashboard() {
       return (invBrand==="All"||r.Brand===invBrand)&&(invStatus==="All"||r.Status?.trim()===invStatus)&&(invType==="All"||r.Product_Type===invType)&&(!invSearch||Object.values(r).some(v=>v?.toLowerCase?.().includes(invSearch.toLowerCase())));
     });
     if(invSort.col==="priority"){rows=[...rows].sort((a,b)=>tinPriority(a)-tinPriority(b));}
+  else if(invSort.col==="__used"){
+    rows=[...rows].sort((a,b)=>{
+      const au=consumedMap[a.Tin_ID]||0, bu=consumedMap[b.Tin_ID]||0;
+      return invSort.dir==="asc"?au-bu:bu-au;
+    });
+  } else if(invSort.col==="__remaining"){
+    rows=[...rows].sort((a,b)=>{
+      const aw=parseFloat(a.Tin_Weight_g)||0, bw=parseFloat(b.Tin_Weight_g)||0;
+      const ar=aw>0?Math.max(0,aw-(consumedMap[a.Tin_ID]||0)):Infinity;
+      const br=bw>0?Math.max(0,bw-(consumedMap[b.Tin_ID]||0)):Infinity;
+      return invSort.dir==="asc"?ar-br:br-ar;
+    });
+  }
     else{rows=sortRows(rows,invSort.col,invSort.dir);}
     return rows;
   },[raw_data,invBrand,invStatus,invType,invSearch,invSort,invCerem,invOrganic,invHarvest,invSingle]);
@@ -1677,11 +1695,13 @@ function PrivateDashboard() {
         const sk=lastDash>0?cs.slice(0,lastDash):cs;
         const sd=lastDash>0?cs.slice(lastDash+1):"asc";
         let cmp=0;
-        if(sk==="brand") cmp=a.brand.localeCompare(b.brand);
-        else if(sk==="pctUsed") cmp=b.pctUsed-a.pctUsed;
-        else if(sk==="weight") cmp=b.total-a.total;
-        else cmp=tinPriority(a.tin)-tinPriority(b.tin);
-        return sd==="desc"?cmp:-cmp;
+        if(sk==="brand")      cmp=a.brand.localeCompare(b.brand);
+        else if(sk==="pctUsed")   cmp=a.pctUsed-b.pctUsed;
+        else if(sk==="weight")    cmp=a.total-b.total;
+        else if(sk==="remaining") cmp=a.remaining-b.remaining;
+        else if(sk==="used")      cmp=a.used-b.used;
+        else cmp=tinPriority(a.tin)-tinPriority(b.tin); // priority: lower number = more urgent = comes first in asc
+        return sd==="desc"?-cmp:cmp;
       });
   },[raw_data,daily,chartSort]);
 
@@ -2098,11 +2118,16 @@ function PrivateDashboard() {
                 <div style={{display:"flex",alignItems:"center",gap:8,paddingBottom:14}}>
                   <span style={{fontSize:10,color:C.stone,letterSpacing:"0.08em",textTransform:"uppercase"}}>Sort</span>
                   <select value={chartSort} onChange={e=>setChartSort(e.target.value)} style={selStyle}>
-                    <option value="priority-asc">⚑ Priority</option>
+                    <option value="priority-asc">⚑ Most urgent first</option>
+                    <option value="priority-desc">⚑ Least urgent first</option>
+                    <option value="remaining-asc">Least remaining first</option>
+                    <option value="remaining-desc">Most remaining first</option>
+                    <option value="used-desc">Most used first</option>
+                    <option value="used-asc">Least used first</option>
                     <option value="weight-desc">Heaviest → Lightest</option>
                     <option value="weight-asc">Lightest → Heaviest</option>
-                    <option value="pctUsed-desc">Most Used → Least</option>
-                    <option value="pctUsed-asc">Least Used → Most</option>
+                    <option value="pctUsed-desc">Highest % used first</option>
+                    <option value="pctUsed-asc">Lowest % used first</option>
                     <option value="brand-asc">Brand A → Z</option>
                     <option value="brand-desc">Brand Z → A</option>
                   </select>
@@ -2172,11 +2197,23 @@ function PrivateDashboard() {
                 <select value={invStatus} onChange={e=>setInvStatus(e.target.value)} style={sel}><option value="All">All</option>{allStatuses.map(s=><option key={s}>{s}</option>)}</select></div>
               <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:9,color:C.mist,textTransform:"uppercase",letterSpacing:"0.08em"}}>Type</span>
                 <select value={invType} onChange={e=>setInvType(e.target.value)} style={sel}><option value="All">All</option>{allTypes.map(t=><option key={t}>{t}</option>)}</select></div>
-              <select value={invSort.col==="priority"?"priority":""} onChange={e=>{if(e.target.value==="priority")setInvSort({col:"priority",dir:"asc"});else if(e.target.value==="expiry")setInvSort({col:"Expiration_Date",dir:"asc"});else if(e.target.value==="received")setInvSort({col:"Date_received",dir:"desc"});}} style={{...sel,borderColor:C.moss,color:C.moss}}>
-                <option value="">Sort: Default</option>
+              <select value={invSort.col} onChange={e=>{
+                const v=e.target.value;
+                if(v==="priority") setInvSort({col:"priority",dir:"asc"});
+                else if(v==="Expiration_Date") setInvSort({col:"Expiration_Date",dir:"asc"});
+                else if(v==="Date_received") setInvSort({col:"Date_received",dir:"desc"});
+                else if(v==="__remaining") setInvSort({col:"__remaining",dir:"asc"});
+                else if(v==="__used") setInvSort({col:"__used",dir:"desc"});
+                else if(v==="Brand") setInvSort({col:"Brand",dir:"asc"});
+                else if(v==="Price/g") setInvSort({col:"Price/g",dir:"asc"});
+              }} style={{...sel,borderColor:C.moss,color:C.moss}}>
                 <option value="priority">⚑ Priority</option>
-                <option value="expiry">Expiration date</option>
-                <option value="received">Recently received</option>
+                <option value="__remaining">Least remaining first</option>
+                <option value="__used">Most used first</option>
+                <option value="Expiration_Date">Expiration date</option>
+                <option value="Date_received">Recently received</option>
+                <option value="Brand">Brand A–Z</option>
+                <option value="Price/g">Price/g</option>
               </select>
               <span style={{fontSize:10,color:C.stone}}>{filteredRaw.length} items</span>
               {(invBrand!=="All"||invStatus!=="All"||invType!=="All"||invSearch||invCerem!=="All"||invOrganic!=="All"||invHarvest!=="All"||invSingle!=="All")&&
@@ -2209,7 +2246,7 @@ function PrivateDashboard() {
           <div style={{...card,padding:0,overflow:"hidden"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
               <thead><tr style={{background:C.ink}}>
-                {[["Brand","Brand"],["Product_Name","Product"],["Product_Type","Type"],["Status","Status"],["_Ceremonial_advertised?_(Matcha)","Cer."],["Organic?_(Matcha)","Org."],["First-harvest?_(Matcha)","1st Harv."],["Single_Cultivar?_(Matcha)","Single Cult."],["Price/g","$/g"],["Tin_Weight_g","Weight (g)"],["How_I_obtained","Obtained"],["Date_received","Received"],["Expiration_Date","Expires"],["",""]].map(([col,label])=>(
+                {[["Brand","Brand"],["Product_Name","Product"],["Product_Type","Type"],["Status","Status"],["_Ceremonial_advertised?_(Matcha)","Cer."],["Organic?_(Matcha)","Org."],["First-harvest?_(Matcha)","1st Harv."],["Single_Cultivar?_(Matcha)","Single Cult."],["Price/g","$/g"],["Tin_Weight_g","Size (g)"],["__used","Used (g)"],["__remaining","Remaining (g)"],["How_I_obtained","Obtained"],["Date_received","Received"],["Expiration_Date","Expires"],["",""]].map(([col,label])=>(
                   col?<Th key={col} label={label} {...thProps(col,invSort,setInvSort)}/>
                      :<th key="act" style={{padding:"10px 14px",color:C.mist,fontSize:9}}></th>
                 ))}
@@ -2240,6 +2277,15 @@ function PrivateDashboard() {
                     </td>
                     <td style={{padding:"9px 14px"}}>{r["Price/g"]||"—"}</td>
                     <td style={{padding:"9px 14px"}}>{r.Tin_Weight_g?Math.round(parseFloat(r.Tin_Weight_g)):"—"}</td>
+                    {(()=>{
+                      const w=parseFloat(r.Tin_Weight_g)||0;
+                      const used=consumedMap[r.Tin_ID]||0;
+                      const rem=w>0?Math.max(0,w-used):null;
+                      return <>
+                        <td style={{padding:"9px 14px",color:C.stone}}>{used>0?Math.round(used):"—"}</td>
+                        <td style={{padding:"9px 14px",color:rem!=null&&rem<w*0.2?C.amber:C.moss,fontWeight:rem!=null&&rem<w*0.2?700:400}}>{rem!=null?Math.round(rem):"—"}</td>
+                      </>;
+                    })()}
                     <td style={{padding:"9px 14px",color:C.stone,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.How_I_obtained||"—"}</td>
                     <td style={{padding:"9px 14px",color:C.stone,whiteSpace:"nowrap"}}>{fmtDate(r.Date_received,true)}</td>
                     {(()=>{
@@ -2613,11 +2659,11 @@ function PrivateDashboard() {
           setShareLoading={setShareLoading}
           shareModal={shareModal}
           setShareModal={setShareModal}
+        />}
         {activeTab==="expenses"&&<ExpensesTab
           expenses={expenses}
           onAdd={()=>setExpenseModal({})}
           onEdit={r=>setExpenseModal(r)}
-        />}
         />}
       </main>
 
