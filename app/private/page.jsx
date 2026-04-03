@@ -959,7 +959,7 @@ function AddListingModal({ raw_data, listings=[], gramsMap={}, onClose, onSave, 
     </div>
   </Modal>;
 }
-function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoading, shareModal, setShareModal }) {
+function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoading, shareModal, setShareModal, gramsMap={} }) {
   const g = useG();
   const card={background:C.parchment,padding:"22px 26px",borderRadius:2};
 
@@ -2659,6 +2659,7 @@ function PrivateDashboard() {
           setShareLoading={setShareLoading}
           shareModal={shareModal}
           setShareModal={setShareModal}
+          gramsMap={gramsMap}
         />}
         {activeTab==="expenses"&&<ExpensesTab
           expenses={expenses}
