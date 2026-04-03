@@ -65,7 +65,7 @@ async function apiDelete(sheetName, rowIndex) {
 }
 
 // ── Sheet names ───────────────────────────────────────────────────────────────
-const SHEETS = { raw_data:"raw_data", daily:"daily_consumption", posts:"posts", cash:"cash_received", codes:"discount_codes" };
+const SHEETS = { raw_data:"raw_data", daily:"daily_consumption", posts:"posts", cash:"cash_received", codes:"discount_codes", expenses:"expenses" };
 
 // Extended type lists (override shared.js)
 const PRODUCT_TYPES_EXT = ["Matcha","Hojicha","Gyokuro","Sencha","Mugwort","Other Tea","Skincare","Appliance","Accessory","Tool","Other"];
@@ -600,6 +600,7 @@ function EditRowModal({row, onSave, onDelete, onClose, saving}) {
       </div>
       {isPR && <>
         <div style={g.col2}>
+          <Field label="Date of Contact"><input type="date" style={inp} value={form.Date_of_contact||""} onChange={e=>set("Date_of_contact",e.target.value)}/></Field>
           <Field label="Post Obligation"><input style={inp} value={form["Obligation?"]||""} onChange={e=>set("Obligation?",e.target.value)}/></Field>
           <Field label="Affiliate Link"><input style={inp} value={form["Affiliate?"]||""} onChange={e=>set("Affiliate?",e.target.value)}/></Field>
         </div>
@@ -775,7 +776,7 @@ function AddCodeModal({onSave,onClose,saving}) {
   </Modal>;
 }
 
-// ── Share Drop Tab ───────────────────────────────────────────────────────────
+// ── Samples Tab ───────────────────────────────────────────────────────────
 function estimateShipping(grams) {
   return { cost: Math.ceil(grams / 28) * 1.00, method: "" };
 }
@@ -790,7 +791,7 @@ function parseSuggestions(raw) {
   try { return JSON.parse(raw||"[]"); } catch { return []; }
 }
 
-function AddListingModal({ raw_data, listings=[], onClose, onSave, initial }) {
+function AddListingModal({ raw_data, listings=[], gramsMap={}, onClose, onSave, initial }) {
   const g = useG();
   const CONSUMABLE_EXT = ["Matcha","Hojicha","Gyokuro","Sencha","Mugwort","Other Tea"];
   const STATUS_ORDER = {"Opened":0,"Unopened":1,"Pending":2};
@@ -802,15 +803,10 @@ function AddListingModal({ raw_data, listings=[], onClose, onSave, initial }) {
   const [notes, setNotes]       = useState(initial?.Notes||"");
   const [active, setActive]     = useState(initial?.Active||"y");
   const [suggestions, setSuggestions] = useState(()=>parseSuggestions(initial?.Suggestions));
-  const [gramsMap, setGramsMap] = useState({});
   const [saving, setSaving]     = useState(false);
   const [pendingTinRef, setPendingTinRef] = useState(null);
   const selected = raw_data.find(r=>r.Tin_ID===tinId) || pendingTinRef || {};
   const inpFull = {...inp, width:"100%"};
-
-  useEffect(()=>{
-    fetch("/api/grams-remaining").then(r=>r.json()).then(d=>{ if(!d.error) setGramsMap(d); }).catch(()=>{});
-  },[]);
 
   const gramsLeft = tinId && gramsMap[tinId] != null ? gramsMap[tinId] : null;
   const tinWeight = parseFloat(selected.Tin_Weight_g)||0;
@@ -842,7 +838,7 @@ function AddListingModal({ raw_data, listings=[], onClose, onSave, initial }) {
     setSaving(false);
   }
 
-  return <Modal title={initial?"Edit Listing":"Add to Share Drop"} onClose={onClose}>
+  return <Modal title={initial?"Edit Listing":"Add to Samples"} onClose={onClose}>
     <Field label="Select Tin">
       <select style={inpFull} value={tinId||""} onChange={e=>{
           e.stopPropagation();
@@ -1025,7 +1021,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
   return <div style={{display:"flex",flexDirection:"column",gap:24}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
       <div>
-        <div style={{fontSize:18,fontFamily:`'Playfair Display',Georgia,serif`,fontWeight:700,color:C.ink}}>Share Drop</div>
+        <div style={{fontSize:18,fontFamily:`'Playfair Display',Georgia,serif`,fontWeight:700,color:C.ink}}>Samples</div>
         <div style={{fontSize:11,color:C.stone,marginTop:4}}>
           Friends claim at{" "}
           <a href="/share" target="_blank" rel="noreferrer" style={{color:C.moss}}>your-domain/share ↗</a>
@@ -1159,7 +1155,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
     </div>}
 
     {listings.length===0&&!shareLoading&&<div style={{...card,textAlign:"center",padding:"48px 24px",color:C.mist,border:`1px solid ${C.warm}`}}>
-      No listings yet. Click "+ Add Listing" to add items to your share drop.
+      No listings yet. Click "+ Add Listing" to add items to your samples.
     </div>}
 
     {/* Shipping summary */}
@@ -1167,7 +1163,7 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
       <SectionTitle right="claimed items only">Shipping Summary</SectionTitle>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,marginTop:12}}>
         <thead><tr style={{background:C.ink}}>
-          {["Person","Total Grams","Shipping Est.","Items"].map(h=>(
+          {["Person","Total Grams","Items"].map(h=>(
             <th key={h} style={{padding:"10px 14px",textAlign:"left",color:C.mist,fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:400}}>{h}</th>
           ))}
         </tr></thead>
@@ -1176,28 +1172,26 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
             <tr key={i} style={{borderBottom:`1px solid ${C.warm}`,background:i%2===0?C.cream:C.parchment}}>
               <td style={{padding:"10px 14px",fontWeight:700}}>{p.name}</td>
               <td style={{padding:"10px 14px"}}>{p.grams}g</td>
-              <td style={{padding:"10px 14px",fontWeight:700,color:C.moss}}>
-                ${Math.ceil(p.grams/28).toFixed(2)}
 
-              </td>
               <td style={{padding:"10px 14px",color:C.stone,fontSize:10,lineHeight:1.6}}>{(p.items||[]).join(", ")}</td>
             </tr>
           ))}
           <tr style={{background:C.parchment,borderTop:`2px solid ${C.warm}`}}>
             <td style={{padding:"10px 14px",fontWeight:700}}>Total</td>
             <td style={{padding:"10px 14px",fontWeight:600}}>{Object.values(personTotals).reduce((s,p)=>s+p.grams,0)}g</td>
-            <td style={{padding:"10px 14px",fontWeight:700,color:C.moss}}>${Object.values(personTotals).reduce((s,p)=>s+Math.ceil(p.grams/28),0).toFixed(2)}</td>
+<td/>
             <td/>
           </tr>
         </tbody>
       </table>
-      <div style={{fontSize:10,color:C.mist,marginTop:10}}>Estimates include ~30g packaging. Replace with actual shipping cost once confirmed.</div>
+
     </div>}
 
     {(shareModal?.type==="add"||shareModal?.type==="edit")&&
       <AddListingModal
         raw_data={raw_data}
         listings={listings}
+        gramsMap={gramsMap}
         initial={shareModal.listing||null}
         onClose={()=>setShareModal(null)}
         onSave={handleSaveListing}
@@ -1205,6 +1199,216 @@ function ShareTab({ raw_data, shareData, setShareData, shareLoading, setShareLoa
   </div>;
 }
 
+
+
+// ── Expense categories ────────────────────────────────────────────────────────
+const EXPENSE_CATS = ["Product Purchase","Packaging","Shipping Supplies","Software/Subscriptions","Equipment","Marketing","Other"];
+
+// ── ExpenseModal ──────────────────────────────────────────────────────────────
+function ExpenseModal({initial, onClose, onSave, saving}) {
+  const g = useG();
+  const blank = {Date:today(),Category:"Product Purchase",Vendor:"",Description:"",Amount:"",Tax_Deductible:"y",Receipt_URL:"",Notes:""};
+  const [form,setForm] = useState(initial ? {...initial} : blank);
+  const [file,setFile] = useState(null);
+  const [uploading,setUploading] = useState(false);
+  const [err,setErr] = useState("");
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const inpFull = {...inp, width:"100%"};
+
+  async function handleFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { setErr("File too large (max 10MB)"); return; }
+    setFile(f);
+    setErr("");
+  }
+
+  async function handleSave() {
+    if (!form.Date || !form.Amount || !form.Vendor) { setErr("Date, vendor, and amount are required."); return; }
+    setErr(""); setUploading(true);
+    let filePayload = {};
+    if (file) {
+      const base64 = await new Promise((res,rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      filePayload = { fileData: base64, fileName: file.name, fileMime: file.type };
+    }
+    await onSave({ row: form, ...filePayload });
+    setUploading(false);
+  }
+
+  return <Modal title={initial ? "Edit Expense" : "Add Expense"} onClose={onClose}>
+    <div style={g.col2}>
+      <Field label="Date *"><input type="date" style={inpFull} value={form.Date} onChange={e=>set("Date",e.target.value)}/></Field>
+      <Field label="Category">
+        <select style={inpFull} value={form.Category} onChange={e=>set("Category",e.target.value)}>
+          {EXPENSE_CATS.map(c=><option key={c}>{c}</option>)}
+        </select>
+      </Field>
+    </div>
+    <div style={g.col2}>
+      <Field label="Vendor *"><input style={inpFull} value={form.Vendor} onChange={e=>set("Vendor",e.target.value)} placeholder="e.g. Yunomi"/></Field>
+      <Field label="Amount ($) *"><input type="number" step="0.01" style={inpFull} value={form.Amount} onChange={e=>set("Amount",e.target.value)} placeholder="0.00"/></Field>
+    </div>
+    <Field label="Description"><input style={inpFull} value={form.Description} onChange={e=>set("Description",e.target.value)} placeholder="What was purchased"/></Field>
+    <Field label="Tax Deductible?">
+      <div style={{display:"flex",gap:8,paddingTop:4}}>
+        {[["y","Yes"],["n","No"]].map(([v,l])=>(
+          <button key={v} type="button" onClick={()=>set("Tax_Deductible",v)}
+            style={{flex:1,padding:"7px",fontSize:11,borderRadius:1,cursor:"pointer",
+              border:`1px solid ${form.Tax_Deductible===v?C.moss:C.warm}`,
+              background:form.Tax_Deductible===v?C.moss:"transparent",
+              color:form.Tax_Deductible===v?C.cream:C.stone}}>{l}</button>
+        ))}
+      </div>
+    </Field>
+    <Field label="Receipt / Order Confirmation">
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {form.Receipt_URL && <a href={form.Receipt_URL} target="_blank" rel="noreferrer"
+          style={{fontSize:10,color:C.moss,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          ↗ View existing receipt
+        </a>}
+        <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic" onChange={handleFile}
+          style={{fontSize:11,color:C.stone,fontFamily:"monospace"}}/>
+        {file && <div style={{fontSize:10,color:C.moss}}>📎 {file.name} ({(file.size/1024).toFixed(0)}KB) — will upload on save</div>}
+        <div style={{fontSize:9,color:C.mist}}>PDF, PNG, JPG accepted · max 10MB · uploads to Google Drive</div>
+      </div>
+    </Field>
+    <Field label="Notes"><input style={inpFull} value={form.Notes} onChange={e=>set("Notes",e.target.value)} placeholder="Optional notes"/></Field>
+    {err && <div style={{fontSize:11,color:C.red,marginTop:4}}>{err}</div>}
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
+      {initial && <button type="button" onClick={()=>onSave({row:form,_delete:true})}
+        style={{...btnD,padding:"8px 16px",fontSize:11}}>Delete</button>}
+      <button type="button" onClick={onClose} style={{...btnS,padding:"8px 16px",fontSize:11}}>Cancel</button>
+      <button type="button" onClick={handleSave} disabled={saving||uploading}
+        style={{...btnP,padding:"8px 20px",fontSize:11,background:C.moss}}>
+        {uploading?"Uploading…":saving?"Saving…":"Save"}
+      </button>
+    </div>
+  </Modal>;
+}
+
+// ── ExpensesTab ───────────────────────────────────────────────────────────────
+function ExpensesTab({expenses, onAdd, onEdit}) {
+  const g = useG();
+  const mobile = useMobile();
+  const [catFilter,setCatFilter] = useState("All");
+  const [taxFilter,setTaxFilter] = useState("All");
+  const [sort,setSort] = useState({col:"Date",dir:"desc"});
+
+  const filtered = expenses
+    .filter(e => catFilter==="All" || e.Category===catFilter)
+    .filter(e => taxFilter==="All" || (taxFilter==="Yes"?e.Tax_Deductible==="y":e.Tax_Deductible!=="y"))
+    .sort((a,b)=>{
+      const aVal = a[sort.col]||"", bVal = b[sort.col]||"";
+      const n = (v) => parseFloat(v)||0;
+      let cmp = sort.col==="Amount" ? n(aVal)-n(bVal) : aVal.localeCompare(bVal);
+      return sort.dir==="desc" ? -cmp : cmp;
+    });
+
+  const total = filtered.reduce((s,e)=>s+(parseFloat(e.Amount)||0),0);
+  const taxTotal = filtered.filter(e=>e.Tax_Deductible==="y").reduce((s,e)=>s+(parseFloat(e.Amount)||0),0);
+
+  const thS = (col) => ({
+    padding:"9px 12px",textAlign:"left",fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",
+    color:sort.col===col?C.ink:C.mist,fontWeight:sort.col===col?700:400,
+    cursor:"pointer",userSelect:"none",background:C.ink,whiteSpace:"nowrap",
+  });
+  const toggleSort = col => setSort(s=>({col,dir:s.col===col&&s.dir==="asc"?"desc":"asc"}));
+
+  const card = {background:C.parchment,border:`1px solid ${C.warm}`,borderRadius:2,padding:"22px 24px"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:24}}>
+    {/* Summary cards */}
+    <div style={g.col3}>
+      <div style={{...card,textAlign:"center"}}>
+        <div style={{fontSize:10,color:C.mist,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Total Expenses</div>
+        <div style={{fontSize:26,fontFamily:"'Playfair Display',Georgia,serif",fontWeight:700}}>${total.toFixed(2)}</div>
+        <div style={{fontSize:10,color:C.stone,marginTop:4}}>{filtered.length} entries</div>
+      </div>
+      <div style={{...card,textAlign:"center"}}>
+        <div style={{fontSize:10,color:C.mist,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Tax Deductible</div>
+        <div style={{fontSize:26,fontFamily:"'Playfair Display',Georgia,serif",fontWeight:700,color:C.moss}}>${taxTotal.toFixed(2)}</div>
+        <div style={{fontSize:10,color:C.stone,marginTop:4}}>{filtered.filter(e=>e.Tax_Deductible==="y").length} entries</div>
+      </div>
+      <div style={{...card,textAlign:"center"}}>
+        <div style={{fontSize:10,color:C.mist,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Non-Deductible</div>
+        <div style={{fontSize:26,fontFamily:"'Playfair Display',Georgia,serif",fontWeight:700,color:C.amber}}>${(total-taxTotal).toFixed(2)}</div>
+        <div style={{fontSize:10,color:C.stone,marginTop:4}}>{filtered.filter(e=>e.Tax_Deductible!=="y").length} entries</div>
+      </div>
+    </div>
+
+    {/* Filters + add button */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{...sel,fontSize:11}}>
+          <option value="All">All categories</option>
+          {EXPENSE_CATS.map(c=><option key={c}>{c}</option>)}
+        </select>
+        <select value={taxFilter} onChange={e=>setTaxFilter(e.target.value)} style={{...sel,fontSize:11}}>
+          <option value="All">All</option>
+          <option value="Yes">Tax deductible</option>
+          <option value="No">Non-deductible</option>
+        </select>
+      </div>
+      <button onClick={onAdd} style={{...btnP,padding:"7px 18px",background:C.moss,fontSize:11}}>+ Add Expense</button>
+    </div>
+
+    {/* Table */}
+    {filtered.length===0
+      ? <div style={{...card,textAlign:"center",color:C.mist,padding:"48px"}}>No expenses yet. Click "+ Add Expense" to start tracking.</div>
+      : <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr>
+                {[["Date","Date"],["Vendor","Vendor"],["Category","Category"],["Description","Description"],["Amount","Amount"],["Tax_Deductible","Deductible?"],["","Receipt"]].map(([col,label])=>(
+                  col
+                    ? <th key={col} onClick={()=>toggleSort(col)} style={{...thS(col),color:C.mist}}>
+                        {label} {sort.col===col?(sort.dir==="asc"?"↑":"↓"):""}
+                      </th>
+                    : <th key="receipt" style={{...thS(""),cursor:"default"}}>Receipt</th>
+                ))}
+                <th style={{...thS(""),cursor:"default",width:40}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((e,i)=>(
+                <tr key={i} className="hrow" style={{borderBottom:`1px solid ${C.warm}`,background:i%2===0?C.cream:"transparent"}}
+                  onClick={()=>onEdit(e)}>
+                  <td style={{padding:"9px 12px",whiteSpace:"nowrap",color:C.stone}}>{fmtDate(e.Date,true)}</td>
+                  <td style={{padding:"9px 12px",fontWeight:600}}>{e.Vendor}</td>
+                  <td style={{padding:"9px 12px",color:C.stone,whiteSpace:"nowrap"}}>{e.Category}</td>
+                  <td style={{padding:"9px 12px",color:C.stone,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.Description||"—"}</td>
+                  <td style={{padding:"9px 12px",fontWeight:700,color:C.ink,whiteSpace:"nowrap"}}>${parseFloat(e.Amount||0).toFixed(2)}</td>
+                  <td style={{padding:"9px 12px",textAlign:"center"}}>
+                    {e.Tax_Deductible==="y"
+                      ? <span style={{color:C.moss,fontWeight:600}}>✓</span>
+                      : <span style={{color:C.mist}}>—</span>}
+                  </td>
+                  <td style={{padding:"9px 12px"}}>
+                    {e.Receipt_URL
+                      ? <a href={e.Receipt_URL} target="_blank" rel="noreferrer"
+                          onClick={ev=>ev.stopPropagation()}
+                          style={{color:C.moss,fontSize:10,whiteSpace:"nowrap"}}>↗ View</a>
+                      : <span style={{color:C.mist,fontSize:10}}>—</span>}
+                  </td>
+                  <td style={{padding:"9px 12px",color:C.mist,fontSize:10}}>edit →</td>
+                </tr>
+              ))}
+              <tr style={{background:C.parchment,borderTop:`2px solid ${C.warm}`}}>
+                <td colSpan={4} style={{padding:"10px 12px",fontWeight:700,fontSize:11}}>Total ({filtered.length} entries)</td>
+                <td style={{padding:"10px 12px",fontWeight:700}}>${total.toFixed(2)}</td>
+                <td style={{padding:"10px 12px",fontSize:10,color:C.moss}}>${taxTotal.toFixed(2)} deductible</td>
+                <td colSpan={2}/>
+              </tr>
+            </tbody>
+          </table>
+        </div>}
+  </div>;
+}
 
 function StatusSyncModal({updates,onApply,onClose,saving}) {
   const [items,setItems]=useState(updates.map(u=>({...u,selected:true})));
@@ -1342,6 +1546,12 @@ function PrivateDashboard() {
   const [shareData,setShareData]=useState({listings:[],claims:[]});
   const [shareLoading,setShareLoading]=useState(false);
   const [shareModal,setShareModal]=useState(null); // {type:"add"|"edit", listing?}
+  const [expenseModal,setExpenseModal]=useState(null); // null | {row?,__rowIndex?}
+  const [gramsMap,setGramsMap]=useState({});
+
+  useEffect(()=>{
+    fetch("/api/grams-remaining").then(r=>r.json()).then(d=>{ if(!d.error) setGramsMap(d); }).catch(()=>{});
+  },[]);
   const [prBrand,setPrBrand]=useState("All");
   const [prType,setPrType]=useState("All");
   const [prStatus,setPrStatus]=useState("All");
@@ -1379,7 +1589,7 @@ function PrivateDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  const {raw_data=[],daily=[],posts=[],cash=[],codes=[]}=sheetData||{};
+  const {raw_data=[],daily=[],posts=[],cash=[],codes=[],expenses=[]}=sheetData||{};
   const today_d=todayDate();
   const pastDaily=daily.filter(d=>{const dt=parseDate(d.Date);return dt&&dt<=today_d;});
   const selfDaily=pastDaily.filter(isSelfConsumption);
@@ -1454,7 +1664,7 @@ function PrivateDashboard() {
   const sortedDaily=useMemo(()=>sortRows(displayDaily,conSort.col,conSort.dir),[displayDaily,conSort]);
 
   const tinGramsData=useMemo(()=>{
-    return raw_data.filter(r=>isConsumableExt(r)&&(r.Status==="Opened"||r.Status==="Unopened")&&parseFloat(r.Tin_Weight_g)>0)
+    return raw_data.filter(r=>isConsumableExt(r)&&["Opened","Unopened","Pending"].includes(r.Status)&&parseFloat(r.Tin_Weight_g)>0)
       .map(r=>{
         const total=parseFloat(r.Tin_Weight_g);
         const used=daily.filter(d=>d.Tin_ID===r.Tin_ID).reduce((s,d)=>s+parseGrams(d.Grams_Used),0);
@@ -1494,9 +1704,9 @@ function PrivateDashboard() {
         await apiUpdate(SHEETS.raw_data,updated.__rowIndex,updated);
         updatedRaw[idx]=updated;
       }
-      setSheetData(d=>({...d,raw_data:updatedRaw}));
       setPendingSyncs([]);
       showToast(`${selected.length} status${selected.length>1?"es":""} updated ✓`);
+      await loadData();
     }catch(e){showToast("Error","error");}
     setSaving(false);
   }
@@ -1563,6 +1773,33 @@ function PrivateDashboard() {
     }catch(e){showToast("Error saving","error");}
     setSaving(false);
   }
+  async function handleExpenseSave(payload) {
+    setSaving(true);
+    try {
+      if (payload._delete) {
+        const res = await fetch("/api/expenses", { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({rowIndex:payload.row.__rowIndex}) });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error||"Delete failed");
+        showToast("Expense deleted");
+      } else if (payload.row.__rowIndex) {
+        const res = await fetch("/api/expenses", { method:"PATCH", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({rowIndex:payload.row.__rowIndex, row:payload.row, fileData:payload.fileData, fileName:payload.fileName, fileMime:payload.fileMime}) });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error||"Update failed");
+        showToast("Expense updated ✓");
+      } else {
+        const res = await fetch("/api/expenses", { method:"POST", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({row:payload.row, fileData:payload.fileData, fileName:payload.fileName, fileMime:payload.fileMime}) });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error||"Save failed");
+        showToast("Expense added ✓");
+      }
+      setExpenseModal(null);
+      await loadData();
+    } catch(e) { showToast(e.message||"Error","error"); }
+    setSaving(false);
+  }
+
   async function handleCodeSave(form){
     setSaving(true);
     try{
@@ -1626,6 +1863,7 @@ function PrivateDashboard() {
     {modal==="addCash"&&<AddCashModal onSave={handleCashSave} onClose={()=>setModal(null)} saving={saving}/>}
     {modal==="addCode"&&<AddCodeModal onSave={handleCodeSave} onClose={()=>setModal(null)} saving={saving}/>}
     {modal?.type==="edit"&&<EditRowModal row={modal.row} onSave={handleEditSave} onDelete={handleDeleteRow} onClose={()=>setModal(null)} saving={saving}/>}
+    {expenseModal!==null&&<ExpenseModal initial={expenseModal||null} onClose={()=>setExpenseModal(null)} onSave={handleExpenseSave} saving={saving}/>}
 
     <div style={{minHeight:"100vh",background:C.cream,color:C.ink}}>
       <header style={{borderBottom:`1px solid ${C.ink}`}}>
@@ -1644,7 +1882,7 @@ function PrivateDashboard() {
             </div>
           </div>
           <nav style={{display:"flex",gap:4,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none",borderBottom:`1px solid ${C.warm}`}}>
-            {[{id:"overview",label:"Overview"},{id:"consumption",label:"Consumption"},{id:"inventory",label:"Inventory"},{id:"pr",label:"PR & Cost"},{id:"social",label:"Social"},{id:"share",label:"Share Drop"}]
+            {[{id:"overview",label:"Overview"},{id:"consumption",label:"Consumption"},{id:"inventory",label:"Inventory"},{id:"pr",label:"PR & Cost"},{id:"social",label:"Social"},{id:"samples",label:"Samples"},{id:"expenses",label:"Expenses"}]
               .map(t=><button key={t.id} style={{...tabStyle(t.id),whiteSpace:"nowrap",flexShrink:0}} onClick={()=>setActiveTab(t.id)}>{t.label}</button>)}
           </nav>
         </div>
@@ -2367,7 +2605,7 @@ function PrivateDashboard() {
         </div>}
 
         {/* ── SHARE DROP ──────────────────────────────────────────────── */}
-        {activeTab==="share"&&<ShareTab
+        {activeTab==="samples"&&<ShareTab
           raw_data={raw_data}
           shareData={shareData}
           setShareData={setShareData}
@@ -2375,6 +2613,11 @@ function PrivateDashboard() {
           setShareLoading={setShareLoading}
           shareModal={shareModal}
           setShareModal={setShareModal}
+        {activeTab==="expenses"&&<ExpensesTab
+          expenses={expenses}
+          onAdd={()=>setExpenseModal({})}
+          onEdit={r=>setExpenseModal(r)}
+        />}
         />}
       </main>
 

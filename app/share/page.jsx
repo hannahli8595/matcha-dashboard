@@ -20,12 +20,6 @@ const C = {
 const font = `'DM Mono', monospace`;
 const serif = `'Playfair Display', Georgia, serif`;
 
-function estimateShipping(grams) {
-  return { cost: Math.ceil(grams / 28) };
-}
-function shippingFor(grams) {
-  return estimateShipping(grams);
-}
 function parseSuggestions(raw) {
   try { return JSON.parse(raw||"[]"); } catch { return []; }
 }
@@ -85,7 +79,7 @@ function SubmitModal({ myClaims, listings, myName, onClose, onSubmitted }) {
   const [err,setErr]=useState("");
 
   const totalG = myClaims.reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
-  const shTotal = Math.ceil(totalG / 28);
+
 
   async function handleSubmit() {
     setSub(true); setErr("");
@@ -132,9 +126,7 @@ function SubmitModal({ myClaims, listings, myName, onClose, onSubmitted }) {
             <div style={{marginTop:16}}>
               {myClaims.map(row)}
             </div>
-            <div style={{borderTop:`2px solid ${C.warm}`,marginTop:8,paddingTop:10,display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600}}>
-              <span>Shipping est.</span><span style={{color:C.moss}}>${shTotal.toFixed(2)}</span>
-            </div>
+
           </> : <>
             {myClaims.map(row)}
             <div style={{borderTop:`2px solid ${C.warm}`,marginTop:8,paddingTop:10}}>
@@ -168,7 +160,7 @@ function SubmitModal({ myClaims, listings, myName, onClose, onSubmitted }) {
 // ── Sticky order panel ────────────────────────────────────────────────────────
 function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submitted }) {
   const totalG = myClaims.reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
-  const shTotal = Math.ceil(totalG / 28);
+
 
   if (!myName) return (
     <div style={{background:C.parchment,border:`1px solid ${C.warm}`,borderRadius:2,padding:"20px 18px"}}>
@@ -211,10 +203,7 @@ function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submit
               <span style={{color:C.stone}}>Total</span>
               <span style={{fontWeight:600}}>{totalG}g</span>
             </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-              <span style={{color:C.stone}}>Shipping est.</span>
-              <span style={{fontWeight:600,color:C.moss}}>${shTotal.toFixed(2)}</span>
-            </div>
+
           </div>
 
           {submitted ? (
@@ -227,8 +216,8 @@ function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submit
               Review &amp; submit →
             </button>
           )}
-          <div style={{fontSize:9,color:C.mist,marginTop:8,textAlign:"center",lineHeight:1.5}}>
-            Submitting notifies Hannah.<br/>You can still edit claims after.
+          <div style={{fontSize:9,color:C.mist,marginTop:8,textAlign:"center"}}>
+            Submitting notifies Hannah. You can still edit claims.
           </div>
         </>}
       </div>
@@ -457,7 +446,7 @@ export default function SharePage() {
       <div style={{maxWidth:1100,margin:"0 auto",padding:mobile?"0 16px":0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12,paddingBottom:20}}>
           <div>
-            <div style={{fontSize:10,color:C.mist,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Share Drop</div>
+            <div style={{fontSize:10,color:C.mist,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>Samples</div>
             <div style={{fontSize:26,fontFamily:serif,color:C.cream,fontWeight:700}}>抹茶 Samples</div>
             <div style={{fontSize:11,color:C.stone,marginTop:7,maxWidth:440,lineHeight:1.7}}>
               Claim your grams. Stamps if it fits in an envelope, package rate if not. Submit when done.
