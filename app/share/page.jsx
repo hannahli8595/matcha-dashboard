@@ -183,7 +183,6 @@ function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submit
         ) : <>
           {myClaims.map((c,i)=>{
             const l=listings.find(l=>l.Tin_ID===c.Tin_ID)||{};
-            const sh=shippingFor(parseFloat(c.Grams_Claimed)||0,l);
             const isSubmitted = !!c.Order_Submitted;
             return <div key={i} style={{padding:"8px 0",borderBottom:`1px solid ${C.warm}`,display:"flex",gap:8,alignItems:"flex-start"}}>
               <div style={{flex:1,minWidth:0}}>
@@ -418,18 +417,21 @@ export default function SharePage() {
   }
 
   const filtered = listings
-    .filter(l=>typeTab(l,activeTab))
+    .filter(l=>{
+      if(!typeTab(l,activeTab)) return false;
+      // Hide fully claimed / sold-out listings
+      const avail = parseFloat(l.Grams_Available)||0;
+      if(avail<=0) return false;
+      const claimed = claims.filter(c=>c.Tin_ID===l.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+      if(claimed>=avail) return false;
+      return true;
+    })
     .sort((a,b)=>{
-      const aClaims = claims.filter(c=>c.Tin_ID===a.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
-      const bClaims = claims.filter(c=>c.Tin_ID===b.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
-      const aAvail = parseFloat(a.Grams_Available)||0;
-      const bAvail = parseFloat(b.Grams_Available)||0;
-      const aSoldOut = aAvail>0 && aClaims>=aAvail;
-      const bSoldOut = bAvail>0 && bClaims>=bAvail;
-      if(aSoldOut && !bSoldOut) return 1;
-      if(!aSoldOut && bSoldOut) return -1;
-      if(sortBy==="remaining") return (bAvail-bClaims)-(aAvail-aClaims);
-      // default: az
+      if(sortBy==="remaining"){
+        const aClaims = claims.filter(c=>c.Tin_ID===a.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+        const bClaims = claims.filter(c=>c.Tin_ID===b.Tin_ID&&c.Status?.toLowerCase()==="claimed").reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+        return ((parseFloat(b.Grams_Available)||0)-bClaims)-((parseFloat(a.Grams_Available)||0)-aClaims);
+      }
       return (a.Brand||"").localeCompare(b.Brand||"") || (a.Product_Name||"").localeCompare(b.Product_Name||"");
     });
   const availableTabs=TYPE_TABS.filter(tab=>tab==="All"||listings.some(l=>typeTab(l,tab)));

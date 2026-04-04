@@ -237,12 +237,12 @@ function LogEntryModal({tins, shareData, shareGramsMap, onSave, onClose, saving}
           const listedG = listing ? parseFloat(listing.Grams_Available)||0 : 0;
           const tinW = parseFloat(t.Tin_Weight_g)||0;
           let gramsInfo = "";
-          if(t.Status==="Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g` : "";
-          else if(t.Status==="Unopened") gramsInfo = tinW ? `, ${tinW}g` : "";
-          else if(t.Status==="Pending") gramsInfo = tinW ? `, ${tinW}g` : "";
-          const listedInfo = listedG>0 ? ` · ${listedG}g listed` : "";
+          if(t.Status==="Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g tin` : "";
+          else if(t.Status==="Unopened") gramsInfo = tinW ? `, ${tinW}g unopened` : "";
+          else if(t.Status==="Pending") gramsInfo = tinW ? `, ${tinW}g pending` : "";
+          const listedNote = listedG>0 ? ` [${listedG}g in samples]` : "";
           return <option key={t.Tin_ID||`__idx__${i}`} value={t.Tin_ID}>
-            {t.Brand} — {t.Product_Name} ({t.Status}{gramsInfo}{listedInfo})
+            {t.Brand} — {t.Product_Name} ({t.Status}{gramsInfo}{listedNote})
           </option>;
         })}
         <option value="__other__">Other / not in inventory</option>
@@ -463,8 +463,10 @@ function toDateInput(v) {
   return v; // already YYYY-MM-DD or empty
 }
 
-function EditRowModal({row, onSave, onDelete, onClose, saving}) {
+function EditRowModal({row, raw_data=[], onSave, onDelete, onClose, saving}) {
   const g = useG();
+  const existingBrands = [...new Set(raw_data.map(r=>r.Brand).filter(Boolean))].sort();
+  const existingOrigins = [...new Set(raw_data.map(r=>r.Origin).filter(Boolean))].sort();
   const [form, setForm] = useState(()=>{
     const f={...row};
     // Pre-convert date fields to YYYY-MM-DD
@@ -525,7 +527,7 @@ function EditRowModal({row, onSave, onDelete, onClose, saving}) {
     {isDaily && <>
       <Field label="Tin ID"><input style={{...inp,color:C.stone,fontFamily:"monospace",fontSize:11}} value={form.Tin_ID||""} onChange={e=>set("Tin_ID",e.target.value)}/></Field>
       <div style={g.col2}>
-        <Field label="Brand"><input style={inp} value={form.Brand||""} onChange={e=>set("Brand",e.target.value)}/></Field>
+        <Field label="Brand"><input style={inp} value={form.Brand||""} onChange={e=>set("Brand",e.target.value)} list="er-brand-list"/><datalist id="er-brand-list">{existingBrands.map(b=><option key={b} value={b}/>)}</datalist></Field>
         <Field label="Product Name"><input style={inp} value={form.Name||""} onChange={e=>set("Name",e.target.value)}/></Field>
       </div>
       <div style={g.col3}>
@@ -640,7 +642,7 @@ function EditRowModal({row, onSave, onDelete, onClose, saving}) {
     {/* ── CASH PAYMENT EDIT ── */}
     {isCash && <>
       <div style={g.col2}>
-        <Field label="Brand"><input style={inp} value={form.Brand||""} onChange={e=>set("Brand",e.target.value)}/></Field>
+        <Field label="Brand"><input style={inp} value={form.Brand||""} onChange={e=>set("Brand",e.target.value)} list="er-brand-list"/><datalist id="er-brand-list">{existingBrands.map(b=><option key={b} value={b}/>)}</datalist></Field>
         <Field label="Type"><input style={inp} value={form.Type||""} onChange={e=>set("Type",e.target.value)} placeholder="e.g. Post, Affiliate"/></Field>
       </div>
       <div style={g.col3}>
@@ -658,7 +660,7 @@ function EditRowModal({row, onSave, onDelete, onClose, saving}) {
     {/* ── DISCOUNT CODE EDIT ── */}
     {isCode && <>
       <div style={g.col2}>
-        <Field label="Brand"><input style={inp} value={form.Brand||""} onChange={e=>set("Brand",e.target.value)}/></Field>
+        <Field label="Brand"><input style={inp} value={form.Brand||""} onChange={e=>set("Brand",e.target.value)} list="er-brand-list"/><datalist id="er-brand-list">{existingBrands.map(b=><option key={b} value={b}/>)}</datalist></Field>
         <Field label="Discount Code"><input style={{...inp,fontFamily:"monospace",fontWeight:700}} value={form.Code||""} onChange={e=>set("Code",e.target.value)} placeholder="e.g. HANNAH10"/></Field>
       </div>
       <div style={g.col2}>
@@ -863,9 +865,9 @@ function AddListingModal({ raw_data, listings=[], gramsMap={}, onClose, onSave, 
           if (st === "Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g tin` : "";
           else if (st === "Unopened") gramsInfo = tinW ? `, ${tinW}g` : "";
           else if (st === "Pending") gramsInfo = tinW ? `, ${tinW}g` : "";
-          const isListed = listings?.find ? listings.find(l=>l.Tin_ID===r.Tin_ID&&l.Active?.toLowerCase()==="y") : false;
-          const listedMark = isListed ? " ★" : "";
-          return <option key={optVal} value={optVal}>{r.Brand} — {r.Product_Name} ({st}{gramsInfo}){listedMark}</option>;
+          const existingListing = listings?.find ? listings.find(l=>l.Tin_ID===r.Tin_ID&&l.Active?.toLowerCase()==="y") : null;
+          const listedNote = existingListing ? ` [listed: ${existingListing.Grams_Available}g]` : "";
+          return <option key={optVal} value={optVal}>{r.Brand} — {r.Product_Name} ({st}{gramsInfo}{listedNote})</option>;
         })}
       </select>
     </Field>
@@ -1727,7 +1729,7 @@ function PrivateDashboard() {
       setPendingSyncs([]);
       showToast(`${selected.length} status${selected.length>1?"es":""} updated ✓`);
       await loadData();
-    }catch(e){showToast("Error","error");}
+    }catch(e){showToast(e.message||"Error saving status","error");console.error("Sync error:",e);}
     setSaving(false);
   }
 
@@ -1882,7 +1884,7 @@ function PrivateDashboard() {
     {modal==="addTin"&&<AddTinModal onSave={handleAddTinSave} onClose={()=>setModal(null)} saving={saving} existingTins={raw_data}/>}
     {modal==="addCash"&&<AddCashModal onSave={handleCashSave} onClose={()=>setModal(null)} saving={saving}/>}
     {modal==="addCode"&&<AddCodeModal onSave={handleCodeSave} onClose={()=>setModal(null)} saving={saving}/>}
-    {modal?.type==="edit"&&<EditRowModal row={modal.row} onSave={handleEditSave} onDelete={handleDeleteRow} onClose={()=>setModal(null)} saving={saving}/>}
+    {modal?.type==="edit"&&<EditRowModal row={modal.row} raw_data={raw_data} onSave={handleEditSave} onDelete={handleDeleteRow} onClose={()=>setModal(null)} saving={saving}/>}
     {expenseModal!==null&&<ExpenseModal initial={expenseModal||null} onClose={()=>setExpenseModal(null)} onSave={handleExpenseSave} saving={saving}/>}
 
     <div style={{minHeight:"100vh",background:C.cream,color:C.ink}}>
