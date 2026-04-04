@@ -1736,17 +1736,15 @@ function PrivateDashboard() {
     try{
       for(const u of selected){
         const tin = raw_data.find(r=>r.Tin_ID===u.tin.Tin_ID);
-        if(!tin?.__rowIndex){showToast("Missing row index — try refreshing","error");continue;}
-        const updated={...tin,Status:u.newStatus};
-        const res = await fetch("/api/private-data",{method:"PATCH",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({sheetName:SHEETS.raw_data,rowIndex:tin.__rowIndex,row:updated})});
+        if(!tin?.Tin_ID){showToast("Tin not found — try refreshing","error");continue;}
+        const res = await fetch("/api/update-status",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({Tin_ID:tin.Tin_ID,newStatus:u.newStatus})});
         const d = await res.json();
         if(!res.ok) throw new Error(d.error||`Update failed (${res.status})`);
+        if(!d.verified) throw new Error(`Write not verified for ${tin.Brand} — sheet may not have updated`);
       }
       setPendingSyncs([]);
       showToast(`${selected.length} status${selected.length>1?"es":""} updated ✓`);
-      // Small delay to let Google Sheets propagate before reloading
-      await new Promise(r=>setTimeout(r,800));
       await loadData();
     }catch(e){showToast(e.message||"Error saving status","error");console.error("Sync error:",e);}
     setSaving(false);
