@@ -130,13 +130,9 @@ function SubmitModal({ myClaims, listings, myName, onClose, onSubmitted }) {
           </> : <>
             {myClaims.map(row)}
             <div style={{borderTop:`2px solid ${C.warm}`,marginTop:8,paddingTop:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600,marginBottom:4}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600}}>
                 <span>Total</span><span>{totalG}g</span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600}}>
-                <span>Shipping est.</span><span style={{color:C.moss}}>${shTotal.toFixed(2)}</span>
-              </div>
-              <div style={{fontSize:10,color:C.mist,marginTop:6}}>Final shipping confirmed before payment.</div>
             </div>
             {err&&<div style={{fontSize:11,color:C.red,marginTop:8}}>{err}</div>}
           </>}

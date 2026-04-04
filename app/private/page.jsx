@@ -231,20 +231,28 @@ function LogEntryModal({tins, shareData, shareGramsMap, onSave, onClose, saving}
     <Field label="Pick from Inventory">
       <select value={form.Tin_ID} onChange={e=>onTinSelect(e.target.value)} style={inp}>
         <option value="">— select a tin —</option>
-        {activeTins.map((t,i)=>{
-          const gl = shareGramsMap?.[t.Tin_ID];
-          const listing = listings.find(l=>l.Tin_ID===t.Tin_ID&&l.Active?.toLowerCase()==="y");
-          const listedG = listing ? parseFloat(listing.Grams_Available)||0 : 0;
-          const tinW = parseFloat(t.Tin_Weight_g)||0;
-          let gramsInfo = "";
-          if(t.Status==="Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g tin` : "";
-          else if(t.Status==="Unopened") gramsInfo = tinW ? `, ${tinW}g unopened` : "";
-          else if(t.Status==="Pending") gramsInfo = tinW ? `, ${tinW}g pending` : "";
-          const listedNote = listedG>0 ? ` [${listedG}g in samples]` : "";
-          return <option key={t.Tin_ID||`__idx__${i}`} value={t.Tin_ID}>
-            {t.Brand} — {t.Product_Name} ({t.Status}{gramsInfo}{listedNote})
-          </option>;
-        })}
+        {(()=>{
+          const groups = {Opened:[],Unopened:[],Pending:[]};
+          activeTins.forEach((t,i)=>{
+            const gl = shareGramsMap?.[t.Tin_ID];
+            const listing = listings.find(l=>l.Tin_ID===t.Tin_ID&&l.Active?.toLowerCase()==="y");
+            const listedG = listing ? parseFloat(listing.Grams_Available)||0 : 0;
+            const tinW = parseFloat(t.Tin_Weight_g)||0;
+            let gLabel = "";
+            if(t.Status==="Opened") gLabel = gl!=null ? `${Math.round(gl)}g remaining` : tinW ? `${tinW}g` : "";
+            else if(t.Status==="Unopened") gLabel = tinW ? `${tinW}g` : "";
+            else if(t.Status==="Pending") gLabel = tinW ? `${tinW}g` : "";
+            const listedNote = listedG>0 ? ` · ${listedG}g in samples` : "";
+            const label = `${t.Brand} — ${t.Product_Name}  [${gLabel}${listedNote}]`;
+            const grp = groups[t.Status] ? t.Status : "Opened";
+            if(groups[grp]) groups[grp].push({key:t.Tin_ID||`__idx__${i}`,val:t.Tin_ID,label});
+          });
+          return Object.entries(groups).filter(([,arr])=>arr.length>0).map(([grp,arr])=>(
+            <optgroup key={grp} label={grp}>
+              {arr.map(({key,val,label})=><option key={key} value={val}>{label}</option>)}
+            </optgroup>
+          ));
+        })()}
         <option value="__other__">Other / not in inventory</option>
       </select>
     </Field>
@@ -855,20 +863,28 @@ function AddListingModal({ raw_data, listings=[], gramsMap={}, onClose, onSave, 
           }
         }}>
         <option value="">— choose a tin —</option>
-        {options.map((r,i)=>{
-          const gl = gramsMap[r.Tin_ID];
-          const st = r.Status || "";
-          const tinW = parseFloat(r.Tin_Weight_g)||0;
-          // Use __rowIndex as stable fallback for items with no Tin_ID
-          const optVal = r.Tin_ID || `__row__${r.__rowIndex||i}`;
-          let gramsInfo = "";
-          if (st === "Opened") gramsInfo = gl!=null ? `, ${Math.round(gl)}g left` : tinW ? `, ${tinW}g tin` : "";
-          else if (st === "Unopened") gramsInfo = tinW ? `, ${tinW}g` : "";
-          else if (st === "Pending") gramsInfo = tinW ? `, ${tinW}g` : "";
-          const existingListing = listings?.find ? listings.find(l=>l.Tin_ID===r.Tin_ID&&l.Active?.toLowerCase()==="y") : null;
-          const listedNote = existingListing ? ` [listed: ${existingListing.Grams_Available}g]` : "";
-          return <option key={optVal} value={optVal}>{r.Brand} — {r.Product_Name} ({st}{gramsInfo}{listedNote})</option>;
-        })}
+        {(()=>{
+          const groups = {Opened:[],Unopened:[],Pending:[]};
+          options.forEach((r,i)=>{
+            const st = r.Status||"";
+            const optVal = r.Tin_ID || `__row__${r.__rowIndex||i}`;
+            const gl = gramsMap[r.Tin_ID];
+            const tinW = parseFloat(r.Tin_Weight_g)||0;
+            const existingL = listings.find(l=>l.Tin_ID===r.Tin_ID&&l.Active?.trim().toLowerCase()==="y");
+            let gLabel = "";
+            if(st==="Opened") gLabel = gl!=null ? `${Math.round(gl)}g remaining` : tinW ? `${tinW}g tin` : "";
+            else if(st==="Unopened") gLabel = tinW ? `${tinW}g` : "";
+            else if(st==="Pending") gLabel = tinW ? `${tinW}g` : "";
+            const listedLabel = existingL ? ` · ${existingL.Grams_Available}g already listed` : "";
+            const label = `${r.Brand} — ${r.Product_Name}  [${gLabel}${listedLabel}]`;
+            if(groups[st]) groups[st].push({optVal,label,r});
+          });
+          return Object.entries(groups).filter(([,arr])=>arr.length>0).map(([grp,arr])=>(
+            <optgroup key={grp} label={grp}>
+              {arr.map(({optVal,label})=><option key={optVal} value={optVal}>{label}</option>)}
+            </optgroup>
+          ));
+        })()}
       </select>
     </Field>
     {tinId && <div style={{background:C.parchment,border:`1px solid ${C.warm}`,borderRadius:1,padding:"10px 14px",fontSize:11,color:C.stone,display:"flex",flexDirection:"column",gap:4}}>
@@ -1718,16 +1734,19 @@ function PrivateDashboard() {
   async function handleApplySync(selected){
     setSaving(true);
     try{
-      const updatedRaw=[...raw_data];
       for(const u of selected){
-        const idx=updatedRaw.findIndex(r=>r.Tin_ID===u.tin.Tin_ID);
-        if(idx===-1)continue;
-        const updated={...updatedRaw[idx],Status:u.newStatus};
-        await apiUpdate(SHEETS.raw_data,updated.__rowIndex,updated);
-        updatedRaw[idx]=updated;
+        const tin = raw_data.find(r=>r.Tin_ID===u.tin.Tin_ID);
+        if(!tin?.__rowIndex){showToast("Missing row index — try refreshing","error");continue;}
+        const updated={...tin,Status:u.newStatus};
+        const res = await fetch("/api/private-data",{method:"PATCH",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({sheetName:SHEETS.raw_data,rowIndex:tin.__rowIndex,row:updated})});
+        const d = await res.json();
+        if(!res.ok) throw new Error(d.error||`Update failed (${res.status})`);
       }
       setPendingSyncs([]);
       showToast(`${selected.length} status${selected.length>1?"es":""} updated ✓`);
+      // Small delay to let Google Sheets propagate before reloading
+      await new Promise(r=>setTimeout(r,800));
       await loadData();
     }catch(e){showToast(e.message||"Error saving status","error");console.error("Sync error:",e);}
     setSaving(false);
