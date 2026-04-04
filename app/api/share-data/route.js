@@ -14,10 +14,17 @@ export async function GET(req) {
     const isOwner = session?.user?.isOwner;
     const { listings, claims } = await getShareData();
     if (isOwner) return NextResponse.json({ listings, claims });
-    const activeListings = listings.filter(l =>
-      l.Active?.toLowerCase() === "y" &&
-      parseFloat(l.Grams_Available) > 0
-    );
+    const activeListings = listings.filter(l => {
+      if (l.Active?.trim().toLowerCase() !== "y") return false;
+      const avail = parseFloat(l.Grams_Available) || 0;
+      if (avail <= 0) return false;
+      // Exclude listings where all available grams are already claimed
+      const claimed = claims
+        .filter(c => c.Tin_ID === l.Tin_ID && c.Status?.toLowerCase() === "claimed")
+        .reduce((s, c) => s + (parseFloat(c.Grams_Claimed) || 0), 0);
+      // Still show if there are waitlist spots or some grams left
+      return true; // show all active — sold-out shows as waitlist
+    });
     return NextResponse.json({ listings: activeListings, claims });
   } catch (err) {
     console.error("Share GET error:", err);
@@ -70,7 +77,7 @@ export async function POST(req) {
     }
 
     const { listings, claims } = await getShareData();
-    const listing = listings.find(l => l.Tin_ID === Tin_ID && l.Active?.toLowerCase() === "y");
+    const listing = listings.find(l => l.Tin_ID === Tin_ID && l.Active?.trim().toLowerCase() === "y");
     if (!listing) return NextResponse.json({ error: "Listing not found or inactive" }, { status: 404 });
 
     // Check if this person already has a claim for this tin

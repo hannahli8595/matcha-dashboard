@@ -158,7 +158,7 @@ function SubmitModal({ myClaims, listings, myName, onClose, onSubmitted }) {
 }
 
 // ── Sticky order panel ────────────────────────────────────────────────────────
-function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submitted }) {
+function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submitted, allPreviouslySubmitted=false, lastSubmittedAt=null }) {
   const totalG = myClaims.reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
 
 
@@ -206,18 +206,19 @@ function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submit
 
           </div>
 
-          {submitted ? (
+          {(submitted||allPreviouslySubmitted) ? (
             <div style={{marginTop:12,padding:"8px 12px",background:"#eef4ec",border:`1px solid ${C.moss}`,borderRadius:1,fontSize:11,color:C.moss,fontWeight:600,textAlign:"center"}}>
               Order submitted ✓
+              {lastSubmittedAt&&<div style={{fontSize:9,color:C.mist,fontWeight:400,marginTop:2}}>{lastSubmittedAt}</div>}
             </div>
-          ) : (
+          ) : hasUnsubmitted ? (
             <button onClick={onSubmit}
               style={{width:"100%",marginTop:12,padding:"10px",background:C.moss,color:C.cream,border:"none",borderRadius:1,cursor:"pointer",fontSize:11,fontFamily:font,letterSpacing:"0.08em",textTransform:"uppercase",fontWeight:600}}>
               Review &amp; submit →
             </button>
-          )}
-          <div style={{fontSize:9,color:C.mist,marginTop:8,textAlign:"center"}}>
-            Submitting notifies Hannah. You can still edit claims.
+          ) : null}
+          <div style={{fontSize:9,color:C.mist,marginTop:8,textAlign:"center",lineHeight:1.5}}>
+            Adding or editing a claim lets you re-submit.
           </div>
         </>}
       </div>
@@ -381,7 +382,7 @@ export default function SharePage() {
   const [activeTab,setActiveTab]  = useState("All");
   const [refresh,setRefresh]      = useState(0);
   const [showSubmit,setShowSubmit]= useState(false);
-  const [submitted,setSubmitted]  = useState(false);
+  const [submitted,setSubmitted]  = useState(false); // true after submit this session
   const [sortBy,setSortBy]        = useState("az");
 
   useEffect(()=>{
@@ -405,6 +406,8 @@ export default function SharePage() {
     ? claims.filter(c=>c.Name?.toLowerCase()===myName.toLowerCase()&&c.Status?.toLowerCase()!=="cancelled")
     : [];
   const hasUnsubmitted = myClaims.some(c=>!c.Order_Submitted&&c.Status?.toLowerCase()==="claimed");
+  const allPreviouslySubmitted = myClaims.length>0 && myClaims.every(c=>c.Order_Submitted);
+  const lastSubmittedAt = myClaims.filter(c=>c.Order_Submitted).sort((a,b)=>b.Order_Submitted.localeCompare(a.Order_Submitted))[0]?.Order_Submitted || null;
 
   async function handleCancelItem(claim){
     try{
@@ -523,6 +526,8 @@ export default function SharePage() {
           listings={listings}
           myName={myName}
           submitted={submitted}
+          allPreviouslySubmitted={allPreviouslySubmitted}
+          lastSubmittedAt={lastSubmittedAt}
           onSubmit={()=>setShowSubmit(true)}
           onCancelItem={handleCancelItem}
         />
