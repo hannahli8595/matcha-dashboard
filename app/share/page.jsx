@@ -156,6 +156,7 @@ function SubmitModal({ myClaims, listings, myName, onClose, onSubmitted }) {
 // ── Sticky order panel ────────────────────────────────────────────────────────
 function OrderPanel({ myClaims, listings, myName, onSubmit, onCancelItem, submitted, allPreviouslySubmitted=false, lastSubmittedAt=null }) {
   const totalG = myClaims.reduce((s,c)=>s+(parseFloat(c.Grams_Claimed)||0),0);
+  const hasUnsubmitted = myClaims.some(c=>!c.Order_Submitted&&c.Status?.toLowerCase()==="claimed");
 
 
   if (!myName) return (

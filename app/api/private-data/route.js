@@ -42,9 +42,15 @@ export async function PATCH(req) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { sheetName, rowIndex, row } = await req.json();
+    console.log("[PATCH] sheetName:", sheetName, "rowIndex:", rowIndex, "rowIndex type:", typeof rowIndex);
+    if (!rowIndex) {
+      console.error("[PATCH] Missing rowIndex!");
+      return NextResponse.json({ error: `rowIndex is ${rowIndex} — row may be missing __rowIndex` }, { status: 400 });
+    }
     await updateRowInSheet(sheetName, rowIndex, row);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    console.error("[PATCH] Error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

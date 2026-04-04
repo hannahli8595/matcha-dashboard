@@ -1,36 +1,26 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getPrivateData } from "@/lib/sheets";
 
 export async function GET() {
   try {
-    const key = process.env.GCP_PRIVATE_KEY || "";
-    const email = process.env.GCP_CLIENT_EMAIL || "";
-    
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        type: "service_account",
-        client_email: email,
-        private_key: key,
-        private_key_id: process.env.GCP_PRIVATE_KEY_ID,
-        project_id: process.env.GCP_PROJECT_ID,
-      },
-      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-    });
-
-    const sheets = google.sheets({ version: "v4", auth });
-    const res = await sheets.spreadsheets.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-    });
-
-    return NextResponse.json({ ok: true, title: res.data.properties.title });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.isOwner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const data = await getPrivateData();
+    const pendingRows = (data.raw_data || [])
+      .filter(r => r.Status?.trim().toLowerCase() === "pending")
+      .map(r => ({
+        Tin_ID: r.Tin_ID,
+        Brand: r.Brand,
+        Status: r.Status,
+        __rowIndex: r.__rowIndex,
+        Date_received: r.Date_received,
+        Product_Type: r.Product_Type,
+      }));
+    return NextResponse.json({ pendingRows, totalRawRows: data.raw_data?.length });
   } catch (err) {
-    return NextResponse.json({
-      error: err.message,
-      key_length: (process.env.GCP_PRIVATE_KEY||"").length,
-      key_start: (process.env.GCP_PRIVATE_KEY||"").slice(0,60),
-      key_end: (process.env.GCP_PRIVATE_KEY||"").slice(-60),
-      email: process.env.GCP_CLIENT_EMAIL,
-    });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
